@@ -21,6 +21,7 @@ import Certificates from './pages/certificates/Certificates'
 import Tasks from './pages/tasks/Tasks'
 import Reports from './pages/reports/Reports'
 import Settings from './pages/settings/Settings'
+import Purchases from './pages/purchases/Purchases'
 
 import type { Role } from './types'
 
@@ -34,6 +35,7 @@ const ROLE_ACCESS: Record<string, Role[]> = {
   '/tests':             ['super_admin', 'admin', 'coach', 'crm_manager'],
   '/documents':         ['super_admin', 'admin', 'coach', 'crm_manager'],
   '/certificates':      ['super_admin', 'admin', 'crm_manager'],
+  '/purchases':         ['super_admin', 'admin', 'crm_manager'],
   '/reports':           ['super_admin', 'admin'],
   '/settings':          ['super_admin', 'admin'],
 }
@@ -99,6 +101,7 @@ export default function App() {
           <Route path="documents"         element={<RequireRole path="/documents"><Documents /></RequireRole>} />
           <Route path="certificates"      element={<RequireRole path="/certificates"><Certificates /></RequireRole>} />
           <Route path="tasks"             element={<Tasks />} />
+          <Route path="purchases"         element={<RequireRole path="/purchases"><Purchases /></RequireRole>} />
           <Route path="reports"           element={<RequireRole path="/reports"><Reports /></RequireRole>} />
           <Route path="settings"          element={<RequireRole path="/settings"><Settings /></RequireRole>} />
         </Route>

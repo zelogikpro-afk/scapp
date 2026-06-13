@@ -3,7 +3,7 @@ import { cn } from '../../lib/utils'
 import {
   LayoutDashboard, Users, UserCheck, Calendar, CreditCard,
   BarChart3, Settings, BookOpen, ClipboardList, FileText,
-  Award, CheckSquare, Layers, ChevronRight, X, Compass
+  Award, CheckSquare, Layers, ChevronRight, X, Compass, ShoppingCart
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import type { Role } from '../../types'
@@ -40,6 +40,7 @@ const navItems: NavItem[] = [
   { label: 'Documents',   icon: FileText,     path: '/documents',     roles: ['super_admin', 'admin', 'coach', 'crm_manager'] },
   { label: 'Certificats', icon: Award,        path: '/certificates',  roles: ['super_admin', 'admin', 'crm_manager'] },
   { label: 'Tâches',      icon: CheckSquare,  path: '/tasks',         roles: ['super_admin', 'admin', 'sales_agent', 'coach', 'crm_manager'] },
+  { label: 'Achats',      icon: ShoppingCart, path: '/purchases',     roles: ['super_admin', 'admin', 'crm_manager'] },
   { label: 'Rapports',    icon: BarChart3,    path: '/reports',       roles: ['super_admin', 'admin'] },
   { label: 'Paramètres',  icon: Settings,     path: '/settings',      roles: ['super_admin', 'admin'] },
 ]
