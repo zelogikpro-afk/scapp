@@ -12,10 +12,10 @@ import type { Role } from '../../types'
 import toast from 'react-hot-toast'
 
 const ROLE_LABELS: Record<string, string> = {
-  super_admin: 'Super Admin', admin: 'Admin', sales_agent: 'Agent Commercial', coach: 'Coach',
+  super_admin: 'Super Admin', admin: 'Admin', sales_agent: 'Agent Commercial', coach: 'Coach', crm_manager: 'Responsable CRM',
 }
 const ROLE_COLORS: Record<string, any> = {
-  super_admin: 'danger', admin: 'warning', sales_agent: 'info', coach: 'success',
+  super_admin: 'danger', admin: 'warning', sales_agent: 'info', coach: 'success', crm_manager: 'purple',
 }
 
 const TABS = [
@@ -89,6 +89,7 @@ function InviteModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
           <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Rôle</label>
           <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as Role }))}
             className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="crm_manager">Responsable CRM</option>
             <option value="sales_agent">Agent Commercial</option>
             <option value="coach">Coach</option>
             <option value="admin">Admin</option>
@@ -135,6 +136,7 @@ function EditUserModal({ user, onClose, onSaved }: { user: ProfileUser; onClose:
           <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Rôle</label>
           <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as Role }))}
             className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="crm_manager">Responsable CRM</option>
             <option value="sales_agent">Agent Commercial</option>
             <option value="coach">Coach</option>
             <option value="admin">Admin</option>
