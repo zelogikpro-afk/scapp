@@ -5,12 +5,32 @@ import { Download, TrendingUp, Users, CreditCard, Award } from 'lucide-react'
 import { MONTHLY_REVENUE, LEAD_SOURCES, CONVERSION_DATA, DASHBOARD_STATS } from '../../lib/mockData'
 import { formatCurrency } from '../../lib/utils'
 import { useAppStore } from '../../store/appStore'
+import * as XLSX from 'xlsx'
 
 const PIE_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b']
 
 export default function Reports() {
   const { leads, participants, payments } = useAppStore()
   const stats = DASHBOARD_STATS
+
+  function exportExcel() {
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(leads.map(l => ({
+      Prénom: l.firstName, Nom: l.lastName, Téléphone: l.phone, Email: l.email,
+      Source: l.source, Statut: l.status, Ville: l.city,
+      'Date création': l.createdAt?.split('T')[0],
+    }))), 'Leads')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(participants.map(p => ({
+      Prénom: p.firstName, Nom: p.lastName, Email: p.email, Téléphone: p.phone,
+      Type: p.type, Actif: p.isActive ? 'Oui' : 'Non',
+    }))), 'Participants')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(payments.map(p => ({
+      Participant: p.participantName, Programme: p.programName,
+      Total: p.totalAmount, Payé: p.amountPaid, Reste: p.remainingAmount,
+      Statut: p.status, Date: p.date,
+    }))), 'Paiements')
+    XLSX.writeFile(wb, `rapport-success-compass-${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
 
   const leadsByStatus = leads.reduce((acc, l) => { acc[l.status] = (acc[l.status] || 0) + 1; return acc }, {} as Record<string, number>)
   const paymentsByStatus = payments.reduce((acc, p) => { acc[p.status] = (acc[p.status] || 0) + 1; return acc }, {} as Record<string, number>)
@@ -20,8 +40,8 @@ export default function Reports() {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Rapports & Analytics</h2>
         <div className="flex gap-2">
-          <Button variant="outline" icon={<Download className="w-4 h-4" />}>Exporter PDF</Button>
-          <Button variant="outline" icon={<Download className="w-4 h-4" />}>Exporter Excel</Button>
+          <Button variant="outline" icon={<Download className="w-4 h-4" />} onClick={() => window.print()}>Exporter PDF</Button>
+          <Button variant="outline" icon={<Download className="w-4 h-4" />} onClick={exportExcel}>Exporter Excel</Button>
         </div>
       </div>
 

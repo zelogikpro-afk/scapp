@@ -1,11 +1,9 @@
 import { useState, useMemo } from 'react'
-import { Plus, Search, Filter, Phone, MessageCircle, Mail, MoreHorizontal, ChevronRight, List, Columns, Eye } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Plus, Search, Upload, List, Columns, Eye, Phone, MessageCircle, Mail, RefreshCw } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
-import { Modal } from '../../components/ui/Modal'
 import { Avatar } from '../../components/ui/Avatar'
 import { Table, Thead, Th, Tbody, Tr, Td } from '../../components/ui/Table'
 import { useAppStore } from '../../store/appStore'
@@ -13,17 +11,23 @@ import { formatDate, timeAgo } from '../../lib/utils'
 import type { Lead, LeadStatus } from '../../types'
 import LeadDetail from './LeadDetail'
 import AddLeadModal from './AddLeadModal'
+import ImportLeadsModal from './ImportLeadsModal'
+import toast from 'react-hot-toast'
 
 const STATUS_CONFIG: Record<LeadStatus, { label: string; color: 'info' | 'success' | 'warning' | 'danger' | 'default' | 'purple'; bg: string }> = {
-  new: { label: 'Nouveau', color: 'info', bg: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' },
-  interested: { label: 'Intéressé', color: 'success', bg: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' },
-  callback: { label: 'Rappel', color: 'warning', bg: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800' },
-  not_interested: { label: 'Pas intéressé', color: 'danger', bg: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' },
-  no_answer: { label: 'Pas de réponse', color: 'default', bg: 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700' },
-  registered: { label: 'Inscrit', color: 'purple', bg: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800' },
+  new:            { label: 'Nouveau lead',       color: 'info',    bg: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' },
+  to_contact:     { label: 'À contacter',        color: 'info',    bg: 'bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800' },
+  contacted:      { label: 'Contacté',           color: 'warning', bg: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800' },
+  no_answer:      { label: 'Injoignable',        color: 'default', bg: 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700' },
+  callback:       { label: 'En réflexion',       color: 'warning', bg: 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800' },
+  interested:     { label: 'Intéressé',          color: 'success', bg: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' },
+  appointment:    { label: 'RDV fixé',           color: 'purple',  bg: 'bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800' },
+  pending_payment:{ label: 'Paiement en attente',color: 'warning', bg: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800' },
+  registered:     { label: 'Inscrit',            color: 'purple',  bg: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800' },
+  not_interested: { label: 'Refus',              color: 'danger',  bg: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' },
 }
 
-const KANBAN_ORDER: LeadStatus[] = ['new', 'interested', 'callback', 'no_answer', 'not_interested', 'registered']
+const KANBAN_ORDER: LeadStatus[] = ['new', 'to_contact', 'contacted', 'no_answer', 'callback', 'interested', 'appointment', 'pending_payment', 'registered', 'not_interested']
 
 function KanbanView({ leads, onSelect }: { leads: Lead[]; onSelect: (lead: Lead) => void }) {
   const { updateLead } = useAppStore()
@@ -89,14 +93,33 @@ function KanbanView({ leads, onSelect }: { leads: Lead[]; onSelect: (lead: Lead)
 }
 
 export default function CRM() {
-  const { leads, updateLead } = useAppStore()
+  const { leads, updateLead, fetchLeads } = useAppStore()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all')
   const [sourceFilter, setSourceFilter] = useState('all')
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table')
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [showImport, setShowImport] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [page, setPage] = useState(1)
+
+  async function syncMeta() {
+    setSyncing(true)
+    try {
+      const res = await fetch('/api/meta-sync', { method: 'POST' })
+      const data = await res.json()
+      if (data.error) {
+        toast.error(data.error)
+      } else {
+        toast.success(`${data.imported} leads importés depuis Meta !`)
+        fetchLeads()
+      }
+    } catch {
+      toast.error('Erreur de connexion à Meta')
+    }
+    setSyncing(false)
+  }
   const PER_PAGE = 15
 
   const sources = useMemo(() => ['all', ...Array.from(new Set(leads.map(l => l.source)))], [leads])
@@ -121,9 +144,17 @@ export default function CRM() {
           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">CRM — Leads</h2>
           <p className="text-sm text-gray-500 mt-0.5">{leads.length} leads au total</p>
         </div>
-        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setShowAdd(true)}>
-          Nouveau lead
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" icon={<RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />} onClick={syncMeta} disabled={syncing}>
+            {syncing ? 'Sync…' : 'Sync Meta'}
+          </Button>
+          <Button variant="outline" icon={<Upload className="w-4 h-4" />} onClick={() => setShowImport(true)}>
+            Importer fichier
+          </Button>
+          <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setShowAdd(true)}>
+            Nouveau lead
+          </Button>
+        </div>
       </div>
 
       {/* Status Summary */}
@@ -262,6 +293,9 @@ export default function CRM() {
 
       {/* Add Lead Modal */}
       {showAdd && <AddLeadModal onClose={() => setShowAdd(false)} />}
+
+      {/* Import Leads Modal */}
+      {showImport && <ImportLeadsModal onClose={() => setShowImport(false)} />}
     </div>
   )
 }

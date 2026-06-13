@@ -22,6 +22,22 @@ import Tasks from './pages/tasks/Tasks'
 import Reports from './pages/reports/Reports'
 import Settings from './pages/settings/Settings'
 
+import type { Role } from './types'
+
+const ROLE_ACCESS: Record<string, Role[]> = {
+  '/crm':               ['super_admin', 'admin', 'sales_agent', 'crm_manager'],
+  '/participants':      ['super_admin', 'admin', 'coach', 'crm_manager'],
+  '/coaching/packs':    ['super_admin', 'admin', 'coach', 'crm_manager'],
+  '/coaching/sessions': ['super_admin', 'admin', 'coach', 'crm_manager'],
+  '/training':          ['super_admin', 'admin', 'coach', 'crm_manager'],
+  '/payments':          ['super_admin', 'admin', 'crm_manager'],
+  '/tests':             ['super_admin', 'admin', 'coach', 'crm_manager'],
+  '/documents':         ['super_admin', 'admin', 'coach', 'crm_manager'],
+  '/certificates':      ['super_admin', 'admin', 'crm_manager'],
+  '/reports':           ['super_admin', 'admin'],
+  '/settings':          ['super_admin', 'admin'],
+}
+
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuthStore()
 
@@ -37,6 +53,15 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAuthenticated) return <Navigate to="/login" replace />
+  return <>{children}</>
+}
+
+function RequireRole({ path, children }: { path: string; children: React.ReactNode }) {
+  const { user } = useAuthStore()
+  const allowed = ROLE_ACCESS[path]
+  if (allowed && user && !allowed.includes(user.role as Role)) {
+    return <Navigate to="/" replace />
+  }
   return <>{children}</>
 }
 
@@ -63,19 +88,19 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
           <Route index element={<Dashboard />} />
-          <Route path="crm" element={<CRM />} />
-          <Route path="participants" element={<Participants />} />
-          <Route path="coaching/packs" element={<CoachingPacks />} />
-          <Route path="coaching/sessions" element={<CoachingSessions />} />
-          <Route path="training" element={<Training />} />
-          <Route path="payments" element={<Payments />} />
-          <Route path="calendar" element={<CalendarPage />} />
-          <Route path="tests" element={<Tests />} />
-          <Route path="documents" element={<Documents />} />
-          <Route path="certificates" element={<Certificates />} />
-          <Route path="tasks" element={<Tasks />} />
-          <Route path="reports" element={<Reports />} />
-          <Route path="settings" element={<Settings />} />
+          <Route path="crm"               element={<RequireRole path="/crm"><CRM /></RequireRole>} />
+          <Route path="participants"      element={<RequireRole path="/participants"><Participants /></RequireRole>} />
+          <Route path="coaching/packs"    element={<RequireRole path="/coaching/packs"><CoachingPacks /></RequireRole>} />
+          <Route path="coaching/sessions" element={<RequireRole path="/coaching/sessions"><CoachingSessions /></RequireRole>} />
+          <Route path="training"          element={<RequireRole path="/training"><Training /></RequireRole>} />
+          <Route path="payments"          element={<RequireRole path="/payments"><Payments /></RequireRole>} />
+          <Route path="calendar"          element={<CalendarPage />} />
+          <Route path="tests"             element={<RequireRole path="/tests"><Tests /></RequireRole>} />
+          <Route path="documents"         element={<RequireRole path="/documents"><Documents /></RequireRole>} />
+          <Route path="certificates"      element={<RequireRole path="/certificates"><Certificates /></RequireRole>} />
+          <Route path="tasks"             element={<Tasks />} />
+          <Route path="reports"           element={<RequireRole path="/reports"><Reports /></RequireRole>} />
+          <Route path="settings"          element={<RequireRole path="/settings"><Settings /></RequireRole>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

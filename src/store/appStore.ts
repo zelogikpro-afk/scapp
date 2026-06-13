@@ -39,10 +39,13 @@ interface AppState {
   // Participants
   addParticipant: (p: Omit<Participant, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
   updateParticipant: (id: string, updates: Partial<Participant>) => Promise<void>
+  deleteParticipant: (id: string) => Promise<void>
+  convertLeadToParticipant: (lead: Lead) => Promise<Participant | null>
 
   // Payments
   addPayment: (p: Omit<Payment, 'id' | 'createdAt'>) => Promise<void>
   updatePayment: (id: string, updates: Partial<Payment>) => Promise<void>
+  deletePayment: (id: string) => Promise<void>
 
   // Notifications
   markNotificationRead: (id: string) => Promise<void>
@@ -51,6 +54,24 @@ interface AppState {
   // Tasks
   addTask: (t: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
   updateTask: (id: string, updates: Partial<Task>) => Promise<void>
+  deleteTask: (id: string) => Promise<void>
+
+  // Coaching
+  addCoachingPack: (p: Omit<CoachingPack, 'id'>) => Promise<void>
+  updateCoachingPack: (id: string, updates: Partial<CoachingPack>) => Promise<void>
+  deleteCoachingPack: (id: string) => Promise<void>
+  addCoachingSession: (s: Omit<CoachingSession, 'id' | 'createdAt'>) => Promise<void>
+  updateCoachingSession: (id: string, updates: Partial<CoachingSession>) => Promise<void>
+  deleteCoachingSession: (id: string) => Promise<void>
+
+  // Appointments
+  addAppointment: (a: Omit<Appointment, 'id'>) => Promise<void>
+  deleteAppointment: (id: string) => Promise<void>
+
+  // Tests
+  addTest: (t: Omit<PsychometricTest, 'id' | 'createdAt'>) => Promise<void>
+  deleteTest: (id: string) => Promise<void>
+  fetchTests: () => Promise<void>
 }
 
 // Map Supabase snake_case → camelCase
@@ -60,6 +81,8 @@ function mapLead(row: any): Lead {
     phone: row.phone, whatsapp: row.whatsapp, email: row.email,
     facebookName: row.facebook_name, instagram: row.instagram,
     source: row.source, campaign: row.campaign, adSet: row.ad_set,
+    city: row.city, profession: row.profession,
+    programInterest: row.program_interest, interestLevel: row.interest_level,
     status: row.status, assignedTo: row.assigned_to,
     nextFollowUpDate: row.next_follow_up_date, tags: row.tags || [],
     notes: (row.lead_notes || []).map((n: any) => ({
@@ -295,6 +318,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   updateParticipant: async (id, updates) => {
     const patch: any = {}
+    if (updates.firstName !== undefined) patch.first_name = updates.firstName
+    if (updates.lastName !== undefined) patch.last_name = updates.lastName
+    if (updates.email !== undefined) patch.email = updates.email
+    if (updates.phone !== undefined) patch.phone = updates.phone
+    if (updates.whatsapp !== undefined) patch.whatsapp = updates.whatsapp
+    if (updates.gender !== undefined) patch.gender = updates.gender
+    if (updates.birthDate !== undefined) patch.birth_date = updates.birthDate
+    if (updates.cin !== undefined) patch.cin = updates.cin
+    if (updates.address !== undefined) patch.address = updates.address
+    if (updates.profession !== undefined) patch.profession = updates.profession
+    if (updates.company !== undefined) patch.company = updates.company
+    if (updates.emergencyContact !== undefined) patch.emergency_contact = updates.emergencyContact
+    if (updates.type !== undefined) patch.type = updates.type
     if (updates.notes !== undefined) patch.notes = updates.notes
     if (updates.tags !== undefined) patch.tags = updates.tags
     if (updates.isActive !== undefined) patch.is_active = updates.isActive
@@ -302,6 +338,32 @@ export const useAppStore = create<AppState>((set, get) => ({
     set(s => ({
       participants: s.participants.map(p => p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p)
     }))
+  },
+
+  deleteParticipant: async (id) => {
+    await supabase.from('participants').delete().eq('id', id)
+    set(s => ({ participants: s.participants.filter(p => p.id !== id) }))
+  },
+
+  convertLeadToParticipant: async (lead) => {
+    const { data: row } = await supabase.from('participants').insert({
+      first_name: lead.firstName, last_name: lead.lastName,
+      email: lead.email ?? '', phone: lead.phone, whatsapp: lead.whatsapp,
+      gender: 'female',
+      profession: lead.profession,
+      type: 'coaching',
+      notes: '',
+      tags: lead.tags ?? [],
+      is_active: true,
+      lead_id: lead.id,
+    }).select().single()
+    if (row) {
+      set(s => ({ participants: [mapParticipant(row), ...s.participants] }))
+      await supabase.from('leads').update({ status: 'registered' }).eq('id', lead.id)
+      set(s => ({ leads: s.leads.map(l => l.id === lead.id ? { ...l, status: 'registered' as const } : l) }))
+      return mapParticipant(row)
+    }
+    return null
   },
 
   addPayment: async (data) => {
@@ -313,6 +375,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       date: data.date, due_date: data.dueDate, notes: data.notes,
     }).select('*, installments(*)').single()
     if (row) set(s => ({ payments: [mapPayment(row), ...s.payments] }))
+  },
+
+  deletePayment: async (id) => {
+    await supabase.from('payments').delete().eq('id', id)
+    set(s => ({ payments: s.payments.filter(p => p.id !== id) }))
   },
 
   updatePayment: async (id, updates) => {
@@ -346,13 +413,123 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (row) set(s => ({ tasks: [mapTask(row), ...s.tasks] }))
   },
 
+  deleteTask: async (id) => {
+    await supabase.from('tasks').delete().eq('id', id)
+    set(s => ({ tasks: s.tasks.filter(t => t.id !== id) }))
+  },
+
   updateTask: async (id, updates) => {
     const patch: any = {}
     if (updates.status !== undefined) patch.status = updates.status
     if (updates.priority !== undefined) patch.priority = updates.priority
+    if (updates.title !== undefined) patch.title = updates.title
+    if (updates.description !== undefined) patch.description = updates.description
+    if (updates.dueDate !== undefined) patch.due_date = updates.dueDate
     await supabase.from('tasks').update(patch).eq('id', id)
     set(s => ({
       tasks: s.tasks.map(t => t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t)
     }))
+  },
+
+  addCoachingPack: async (data) => {
+    const { data: row } = await supabase.from('coaching_packs').insert({
+      participant_id: data.participantId, name: data.name,
+      total_sessions: data.totalSessions, used_sessions: data.usedSessions ?? 0,
+      price: data.price, discount: data.discount ?? 0, amount_paid: data.amountPaid ?? 0,
+      purchase_date: data.purchaseDate, expiration_date: data.expirationDate,
+      status: data.status, coach_id: data.coachId,
+    }).select().single()
+    if (row) set(s => ({ coachingPacks: [mapCoachingPack(row), ...s.coachingPacks] }))
+  },
+
+  updateCoachingPack: async (id, updates) => {
+    const patch: any = {}
+    if (updates.name !== undefined) patch.name = updates.name
+    if (updates.totalSessions !== undefined) patch.total_sessions = updates.totalSessions
+    if (updates.usedSessions !== undefined) patch.used_sessions = updates.usedSessions
+    if (updates.status !== undefined) patch.status = updates.status
+    if (updates.expirationDate !== undefined) patch.expiration_date = updates.expirationDate
+    await supabase.from('coaching_packs').update(patch).eq('id', id)
+    set(s => ({ coachingPacks: s.coachingPacks.map(p => p.id === id ? { ...p, ...updates } : p) }))
+  },
+
+  deleteCoachingPack: async (id) => {
+    await supabase.from('coaching_packs').delete().eq('id', id)
+    set(s => ({ coachingPacks: s.coachingPacks.filter(p => p.id !== id) }))
+  },
+
+  addCoachingSession: async (data) => {
+    const { data: row } = await supabase.from('coaching_sessions').insert({
+      pack_id: data.packId, participant_id: data.participantId,
+      coach_id: data.coachId, date: data.date, time: data.time,
+      duration: data.duration, session_number: data.sessionNumber,
+      status: data.status, summary: data.summary, objectives: data.objectives,
+      homework: data.homework, private_notes: data.privateNotes,
+      meet_link: data.meetLink, zoom_link: data.zoomLink,
+    }).select().single()
+    if (row) set(s => ({ coachingSessions: [mapSession(row), ...s.coachingSessions] }))
+  },
+
+  updateCoachingSession: async (id, updates) => {
+    const patch: any = {}
+    if (updates.date !== undefined) patch.date = updates.date
+    if (updates.time !== undefined) patch.time = updates.time
+    if (updates.status !== undefined) patch.status = updates.status
+    if (updates.summary !== undefined) patch.summary = updates.summary
+    if (updates.objectives !== undefined) patch.objectives = updates.objectives
+    if (updates.homework !== undefined) patch.homework = updates.homework
+    if (updates.privateNotes !== undefined) patch.private_notes = updates.privateNotes
+    await supabase.from('coaching_sessions').update(patch).eq('id', id)
+    set(s => ({ coachingSessions: s.coachingSessions.map(x => x.id === id ? { ...x, ...updates } : x) }))
+  },
+
+  deleteCoachingSession: async (id) => {
+    await supabase.from('coaching_sessions').delete().eq('id', id)
+    set(s => ({ coachingSessions: s.coachingSessions.filter(x => x.id !== id) }))
+  },
+
+  deleteAppointment: async (id) => {
+    await supabase.from('appointments').delete().eq('id', id)
+    set(s => ({ appointments: s.appointments.filter(a => a.id !== id) }))
+  },
+
+  deleteTest: async (id) => {
+    await supabase.from('psychometric_tests').delete().eq('id', id)
+    set(s => ({ tests: s.tests.filter(t => t.id !== id) }))
+  },
+
+  fetchTests: async () => {
+    const { data } = await supabase.from('psychometric_tests').select('*').order('date', { ascending: false })
+    if (data) set({ tests: data.map((t: any) => ({
+      id: t.id, participantId: t.participant_id, type: t.type, date: t.date,
+      result: t.result, score: t.score, interpretation: t.interpretation,
+      coachNotes: t.coach_notes, pdfUrl: t.pdf_url, administeredBy: t.administered_by,
+      createdAt: t.created_at,
+    })) })
+  },
+
+  addTest: async (data) => {
+    const { data: row } = await supabase.from('psychometric_tests').insert({
+      participant_id: data.participantId, type: data.type, date: data.date,
+      result: data.result, score: data.score, interpretation: data.interpretation,
+      coach_notes: data.coachNotes, administered_by: data.administeredBy,
+    }).select().single()
+    if (row) set(s => ({ tests: [{
+      id: row.id, participantId: row.participant_id, type: row.type, date: row.date,
+      result: row.result, score: row.score, interpretation: row.interpretation,
+      coachNotes: row.coach_notes, administeredBy: row.administered_by, createdAt: row.created_at,
+    }, ...s.tests] }))
+  },
+
+  addAppointment: async (data) => {
+    const { data: row } = await supabase.from('appointments').insert({
+      title: data.title, participant_id: data.participantId,
+      participant_name: data.participantName, coach_id: data.coachId,
+      coach_name: data.coachName, program_type: data.programType,
+      date: data.date, start_time: data.startTime, end_time: data.endTime,
+      location: data.location, meet_link: data.meetLink, zoom_link: data.zoomLink,
+      notes: data.notes, status: data.status ?? 'scheduled', color: data.color ?? '#3B82F6',
+    }).select().single()
+    if (row) set(s => ({ appointments: [mapAppointment(row), ...s.appointments] }))
   },
 }))

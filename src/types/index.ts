@@ -1,5 +1,5 @@
 // ─── User & Auth ───────────────────────────────────────────────────────────────
-export type Role = 'super_admin' | 'admin' | 'sales_agent' | 'coach'
+export type Role = 'super_admin' | 'admin' | 'sales_agent' | 'coach' | 'crm_manager'
 
 export interface User {
   id: string
@@ -12,7 +12,7 @@ export interface User {
 }
 
 // ─── Lead (CRM) ────────────────────────────────────────────────────────────────
-export type LeadStatus = 'interested' | 'not_interested' | 'no_answer' | 'callback' | 'registered' | 'new'
+export type LeadStatus = 'new' | 'to_contact' | 'contacted' | 'no_answer' | 'callback' | 'interested' | 'appointment' | 'pending_payment' | 'registered' | 'not_interested'
 
 export interface Lead {
   id: string
@@ -26,6 +26,10 @@ export interface Lead {
   source: string
   campaign?: string
   adSet?: string
+  city?: string
+  profession?: string
+  programInterest?: string
+  interestLevel?: 'low' | 'medium' | 'high'
   status: LeadStatus
   assignedTo?: string
   notes: LeadNote[]

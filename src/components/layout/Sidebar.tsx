@@ -6,35 +6,45 @@ import {
   Award, CheckSquare, Layers, ChevronRight, X, Compass
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
+import type { Role } from '../../types'
 
 interface SidebarProps {
   open: boolean
   onClose: () => void
 }
 
-const navItems = [
-  { label: 'Tableau de bord', icon: LayoutDashboard, path: '/' },
-  { label: 'CRM', icon: Users, path: '/crm', badge: null },
-  { label: 'Participants', icon: UserCheck, path: '/participants' },
+type NavItem = {
+  label: string
+  icon: any
+  path: string
+  roles: Role[]
+  badge?: null
+  children?: { label: string; path: string }[]
+}
+
+const navItems: NavItem[] = [
+  { label: 'Tableau de bord', icon: LayoutDashboard, path: '/',          roles: ['super_admin', 'admin', 'sales_agent', 'coach', 'crm_manager'] },
+  { label: 'CRM',             icon: Users,           path: '/crm',        roles: ['super_admin', 'admin', 'sales_agent', 'crm_manager'] },
+  { label: 'Participants',    icon: UserCheck,        path: '/participants',roles: ['super_admin', 'admin', 'coach', 'crm_manager'] },
   {
-    label: 'Coaching', icon: BookOpen, path: '/coaching',
+    label: 'Coaching', icon: BookOpen, path: '/coaching', roles: ['super_admin', 'admin', 'coach', 'crm_manager'],
     children: [
-      { label: 'Packs', path: '/coaching/packs' },
-      { label: 'Séances', path: '/coaching/sessions' },
+      { label: 'Packs',    path: '/coaching/packs' },
+      { label: 'Séances',  path: '/coaching/sessions' },
     ]
   },
-  { label: 'Formations', icon: Layers, path: '/training' },
-  { label: 'Paiements', icon: CreditCard, path: '/payments' },
-  { label: 'Calendrier', icon: Calendar, path: '/calendar' },
-  { label: 'Tests', icon: ClipboardList, path: '/tests' },
-  { label: 'Documents', icon: FileText, path: '/documents' },
-  { label: 'Certificats', icon: Award, path: '/certificates' },
-  { label: 'Tâches', icon: CheckSquare, path: '/tasks' },
-  { label: 'Rapports', icon: BarChart3, path: '/reports' },
-  { label: 'Paramètres', icon: Settings, path: '/settings' },
+  { label: 'Formations',  icon: Layers,       path: '/training',      roles: ['super_admin', 'admin', 'coach', 'crm_manager'] },
+  { label: 'Paiements',   icon: CreditCard,   path: '/payments',      roles: ['super_admin', 'admin', 'crm_manager'] },
+  { label: 'Calendrier',  icon: Calendar,     path: '/calendar',      roles: ['super_admin', 'admin', 'sales_agent', 'coach', 'crm_manager'] },
+  { label: 'Tests',       icon: ClipboardList,path: '/tests',         roles: ['super_admin', 'admin', 'coach', 'crm_manager'] },
+  { label: 'Documents',   icon: FileText,     path: '/documents',     roles: ['super_admin', 'admin', 'coach', 'crm_manager'] },
+  { label: 'Certificats', icon: Award,        path: '/certificates',  roles: ['super_admin', 'admin', 'crm_manager'] },
+  { label: 'Tâches',      icon: CheckSquare,  path: '/tasks',         roles: ['super_admin', 'admin', 'sales_agent', 'coach', 'crm_manager'] },
+  { label: 'Rapports',    icon: BarChart3,    path: '/reports',       roles: ['super_admin', 'admin'] },
+  { label: 'Paramètres',  icon: Settings,     path: '/settings',      roles: ['super_admin', 'admin'] },
 ]
 
-function NavItem({ item, onClose }: { item: typeof navItems[0]; onClose: () => void }) {
+function NavItemComp({ item, onClose }: { item: NavItem; onClose: () => void }) {
   const location = useLocation()
   const hasChildren = 'children' in item && item.children
 
@@ -42,16 +52,20 @@ function NavItem({ item, onClose }: { item: typeof navItems[0]; onClose: () => v
     const isParentActive = location.pathname.startsWith(item.path)
     return (
       <div>
-        <div className={cn(
-          'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium cursor-default',
-          isParentActive
-            ? 'text-white bg-white/10'
-            : 'text-sidebar-muted'
-        )}>
+        <NavLink
+          to={item.children![0].path}
+          onClick={onClose}
+          className={cn(
+            'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
+            isParentActive
+              ? 'text-white bg-white/10'
+              : 'text-sidebar-muted hover:text-white hover:bg-white/5'
+          )}
+        >
           <item.icon className="w-4 h-4 flex-shrink-0" />
           <span className="flex-1">{item.label}</span>
           <ChevronRight className={cn('w-3.5 h-3.5 transition-transform', isParentActive && 'rotate-90')} />
-        </div>
+        </NavLink>
         {isParentActive && (
           <div className="ml-7 mt-0.5 space-y-0.5 border-l border-white/10 pl-3">
             {item.children!.map(child => (
@@ -93,6 +107,11 @@ function NavItem({ item, onClose }: { item: typeof navItems[0]; onClose: () => v
 
 export function Sidebar({ open, onClose }: SidebarProps) {
   const { user } = useAuthStore()
+  const role = user?.role as Role | undefined
+
+  const visibleItems = role
+    ? navItems.filter(item => item.roles.includes(role))
+    : []
 
   return (
     <>
@@ -121,8 +140,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto scrollbar-thin px-3 py-3 space-y-0.5">
-          {navItems.map(item => (
-            <NavItem key={item.path} item={item} onClose={onClose} />
+          {visibleItems.map(item => (
+            <NavItemComp key={item.path} item={item} onClose={onClose} />
           ))}
         </nav>
 
@@ -131,7 +150,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           <div className="px-3 py-3 border-t border-sidebar-border flex-shrink-0">
             <div className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
               <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-                {user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                {user.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-white text-xs font-medium truncate">{user.name}</div>

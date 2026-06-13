@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Phone, MessageCircle, Mail, Send, Calendar, UserPlus, Clock, Edit2 } from 'lucide-react'
+import { Phone, MessageCircle, Mail, Send, Edit2, UserPlus, Save, X, Trash2 } from 'lucide-react'
 import { Modal } from '../../components/ui/Modal'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
 import { Avatar } from '../../components/ui/Avatar'
 import { useAppStore } from '../../store/appStore'
 import { useAuthStore } from '../../store/authStore'
@@ -10,19 +11,40 @@ import { formatDate, timeAgo } from '../../lib/utils'
 import type { Lead, LeadStatus } from '../../types'
 
 const STATUS_CONFIG: Record<LeadStatus, { label: string; color: any }> = {
-  new: { label: 'Nouveau', color: 'info' },
-  interested: { label: 'Intéressé', color: 'success' },
-  callback: { label: 'Rappel', color: 'warning' },
-  not_interested: { label: 'Pas intéressé', color: 'danger' },
-  no_answer: { label: 'Pas de réponse', color: 'default' },
-  registered: { label: 'Inscrit', color: 'purple' },
+  new:             { label: 'Nouveau lead',        color: 'info' },
+  to_contact:      { label: 'À contacter',         color: 'info' },
+  contacted:       { label: 'Contacté',            color: 'warning' },
+  no_answer:       { label: 'Injoignable',         color: 'default' },
+  callback:        { label: 'En réflexion',        color: 'warning' },
+  interested:      { label: 'Intéressé',           color: 'success' },
+  appointment:     { label: 'RDV fixé',            color: 'purple' },
+  pending_payment: { label: 'Paiement en attente', color: 'warning' },
+  registered:      { label: 'Inscrit',             color: 'purple' },
+  not_interested:  { label: 'Refus',               color: 'danger' },
 }
 
 export default function LeadDetail({ lead, onClose }: { lead: Lead; onClose: () => void }) {
   const [note, setNote] = useState('')
-  const [activeTab, setActiveTab] = useState<'info' | 'notes' | 'history'>('info')
-  const { updateLead, addLeadNote } = useAppStore()
+  const [activeTab, setActiveTab] = useState<'info' | 'edit' | 'notes' | 'history'>('info')
+  const [converting, setConverting] = useState(false)
+  const [convertDone, setConvertDone] = useState(false)
+  const { updateLead, deleteLead, addLeadNote, convertLeadToParticipant } = useAppStore()
   const { user } = useAuthStore()
+
+  // Edit form state
+  const [editForm, setEditForm] = useState({
+    firstName: lead.firstName,
+    lastName: lead.lastName,
+    phone: lead.phone,
+    whatsapp: lead.whatsapp ?? '',
+    email: lead.email ?? '',
+    city: lead.city ?? '',
+    profession: lead.profession ?? '',
+    programInterest: lead.programInterest ?? '',
+    interestLevel: lead.interestLevel ?? '' as '' | 'low' | 'medium' | 'high',
+    nextFollowUpDate: lead.nextFollowUpDate ?? '',
+  })
+  const [saving, setSaving] = useState(false)
 
   function handleAddNote() {
     if (!note.trim() || !user) return
@@ -34,8 +56,31 @@ export default function LeadDetail({ lead, onClose }: { lead: Lead; onClose: () 
     updateLead(lead.id, { status })
   }
 
+  async function handleSaveEdit() {
+    setSaving(true)
+    await updateLead(lead.id, {
+      firstName: editForm.firstName,
+      lastName: editForm.lastName,
+      phone: editForm.phone,
+      whatsapp: editForm.whatsapp || undefined,
+      email: editForm.email || undefined,
+      nextFollowUpDate: editForm.nextFollowUpDate || undefined,
+    })
+    setSaving(false)
+    setActiveTab('info')
+  }
+
+  async function handleConvert() {
+    if (!window.confirm(`Convertir ${lead.firstName} ${lead.lastName} en participant ?`)) return
+    setConverting(true)
+    await convertLeadToParticipant(lead)
+    setConverting(false)
+    setConvertDone(true)
+  }
+
   const tabs = [
     { id: 'info', label: 'Informations' },
+    { id: 'edit', label: 'Modifier' },
     { id: 'notes', label: `Notes (${lead.notes.length})` },
     { id: 'history', label: `Historique (${lead.followUps.length})` },
   ] as const
@@ -54,8 +99,8 @@ export default function LeadDetail({ lead, onClose }: { lead: Lead; onClose: () 
               {lead.campaign && <span className="text-xs text-gray-400">· {lead.campaign}</span>}
             </div>
           </div>
-          {/* Quick actions */}
-          <div className="flex gap-2">
+          {/* Actions */}
+          <div className="flex gap-2 flex-wrap justify-end">
             {lead.phone && (
               <a href={`tel:${lead.phone}`} className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 hover:bg-blue-100 transition-colors">
                 <Phone className="w-4 h-4" />
@@ -71,6 +116,19 @@ export default function LeadDetail({ lead, onClose }: { lead: Lead; onClose: () 
                 <Mail className="w-4 h-4" />
               </a>
             )}
+            {!convertDone && lead.status !== 'registered' && (
+              <Button variant="primary" size="sm" icon={<UserPlus className="w-3.5 h-3.5" />} onClick={handleConvert} disabled={converting}>
+                {converting ? 'En cours…' : 'Participant'}
+              </Button>
+            )}
+            {convertDone && <Badge variant="success" dot>Converti !</Badge>}
+            <button
+              onClick={async () => { if (!confirm(`Supprimer le lead ${lead.firstName} ${lead.lastName} ?`)) return; await deleteLead(lead.id); onClose() }}
+              className="w-9 h-9 rounded-lg bg-red-50 dark:bg-red-900/20 flex items-center justify-center text-red-500 hover:bg-red-100 transition-colors"
+              title="Supprimer le lead"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
@@ -112,11 +170,11 @@ export default function LeadDetail({ lead, onClose }: { lead: Lead; onClose: () 
               { label: 'Téléphone', value: lead.phone },
               { label: 'WhatsApp', value: lead.whatsapp },
               { label: 'Email', value: lead.email },
-              { label: 'Facebook', value: lead.facebookName },
-              { label: 'Instagram', value: lead.instagram },
+              { label: 'Ville', value: lead.city },
+              { label: 'Profession', value: lead.profession },
+              { label: 'Programme intéressé', value: lead.programInterest },
+              { label: 'Niveau d\'intérêt', value: lead.interestLevel === 'high' ? 'Élevé' : lead.interestLevel === 'medium' ? 'Moyen' : lead.interestLevel === 'low' ? 'Faible' : undefined },
               { label: 'Source', value: lead.source },
-              { label: 'Campagne', value: lead.campaign },
-              { label: 'Ad Set', value: lead.adSet },
               { label: 'Date de réception', value: formatDate(lead.createdAt) },
               { label: 'Prochain rappel', value: lead.nextFollowUpDate ? formatDate(lead.nextFollowUpDate) : '—' },
             ].map(({ label, value }) => (
@@ -128,9 +186,70 @@ export default function LeadDetail({ lead, onClose }: { lead: Lead; onClose: () 
           </div>
         )}
 
+        {activeTab === 'edit' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Prénom</label>
+                <Input value={editForm.firstName} onChange={e => setEditForm(f => ({ ...f, firstName: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Nom</label>
+                <Input value={editForm.lastName} onChange={e => setEditForm(f => ({ ...f, lastName: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Téléphone</label>
+                <Input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">WhatsApp</label>
+                <Input value={editForm.whatsapp} onChange={e => setEditForm(f => ({ ...f, whatsapp: e.target.value }))} />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Email</label>
+                <Input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} type="email" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Ville</label>
+                <Input value={editForm.city} onChange={e => setEditForm(f => ({ ...f, city: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Profession</label>
+                <Input value={editForm.profession} onChange={e => setEditForm(f => ({ ...f, profession: e.target.value }))} />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Programme intéressé</label>
+                <Input value={editForm.programInterest} onChange={e => setEditForm(f => ({ ...f, programInterest: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Niveau d'intérêt</label>
+                <select
+                  value={editForm.interestLevel}
+                  onChange={e => setEditForm(f => ({ ...f, interestLevel: e.target.value as any }))}
+                  className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">— Non défini</option>
+                  <option value="low">Faible</option>
+                  <option value="medium">Moyen</option>
+                  <option value="high">Élevé</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Prochain rappel</label>
+                <Input value={editForm.nextFollowUpDate} onChange={e => setEditForm(f => ({ ...f, nextFollowUpDate: e.target.value }))} type="date" />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" size="sm" icon={<X className="w-3.5 h-3.5" />} onClick={() => setActiveTab('info')}>Annuler</Button>
+              <Button variant="primary" size="sm" icon={<Save className="w-3.5 h-3.5" />} onClick={handleSaveEdit} disabled={saving}>
+                {saving ? 'Enregistrement…' : 'Enregistrer'}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'notes' && (
           <div className="space-y-3">
-            {/* Add note */}
             <div className="flex gap-2">
               <textarea
                 value={note}
@@ -143,7 +262,6 @@ export default function LeadDetail({ lead, onClose }: { lead: Lead; onClose: () 
                 <Send className="w-4 h-4" />
               </Button>
             </div>
-
             {lead.notes.length === 0 ? (
               <p className="text-xs text-gray-400 text-center py-4">Aucune note pour ce lead</p>
             ) : (

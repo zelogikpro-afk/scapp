@@ -33,6 +33,11 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'manage_leads', 'convert_lead', 'view_coaching', 'manage_coaching',
     'view_training', 'manage_training', 'delete_data', 'export_data', 'view_dashboard'
   ],
+  crm_manager: [
+    'view_all_leads', 'view_all_clients', 'view_payments',
+    'manage_leads', 'convert_lead', 'view_coaching', 'manage_coaching',
+    'view_training', 'manage_training', 'export_data', 'view_dashboard'
+  ],
   sales_agent: ['manage_leads', 'convert_lead', 'view_dashboard'],
   coach: ['view_coaching', 'manage_coaching', 'view_dashboard'],
 }
