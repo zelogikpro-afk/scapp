@@ -1,412 +1,312 @@
 import { useState, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import {
-  QS_QUESTIONS, QS_PILIER_ORDER, getPilierInfo, getPilierScore,
-  getTop5Forces, getBottom5Axes, getQSLevel,
+  QS_QUESTIONS, QS_ANSWERS, QS_PILIER_ORDER,
+  getPilierInfo, getPilierScore, getQSLevel, getTotalScore, getQSGlobalLevel,
   type QSPilier,
 } from '../../data/testQSQuestions'
 import QSReportTemplate, { PAGE_W, PAGE_H } from './QSReportTemplate'
+import html2canvas from 'html2canvas'
+import jsPDF from 'jspdf'
 
 type Step = 'intro' | 'info' | 'questions' | 'result'
 
+const NAVY  = '#1D3462'
+const TEAL  = '#3BAAB5'
+
 export default function TestQSPage() {
-  const [step, setStep]         = useState<Step>('intro')
-  const [info, setInfo]         = useState({ firstName: '', lastName: '', email: '', phone: '' })
-  const [answers, setAnswers]   = useState<Record<number, number>>({})
-  const [saving, setSaving]     = useState(false)
-  const [downloading, setDownloading] = useState(false)
-  const [scores, setScores]     = useState<Record<QSPilier, number>>({} as any)
+  const [step, setStep]       = useState<Step>('intro')
+  const [firstName, setFirst] = useState('')
+  const [lastName, setLast]   = useState('')
+  const [email, setEmail]     = useState('')
+  const [phone, setPhone]     = useState('')
+  const [answers, setAnswers] = useState<Record<number, number>>({})
+  const [saving, setSaving]   = useState(false)
+  const [downloading, setDL]  = useState(false)
   const reportRef = useRef<HTMLDivElement>(null)
 
-  const totalAnswered = Object.keys(answers).length
-  const totalQuestions = QS_QUESTIONS.length // 45
+  const answered    = Object.keys(answers).length
+  const total       = QS_QUESTIONS.length
+  const allAnswered = answered === total
 
-  function calcScores(): Record<QSPilier, number> {
-    const s = {} as Record<QSPilier, number>
-    for (const p of QS_PILIER_ORDER) s[p] = getPilierScore(p, answers)
-    return s
+  function answer(qId: number, val: number) {
+    setAnswers(prev => ({ ...prev, [qId]: val }))
   }
 
-  async function handleSubmit() {
-    if (totalAnswered < totalQuestions) return
-    setSaving(true)
-    const computed = calcScores()
-    setScores(computed)
+  // Group questions by pilier in order
+  const grouped = QS_PILIER_ORDER.map(pilier => ({
+    pilier,
+    info: getPilierInfo(pilier),
+    questions: QS_QUESTIONS.filter(q => q.pilier === pilier),
+  }))
 
-    const total = QS_PILIER_ORDER.reduce((acc, p) => acc + computed[p], 0)
-    const level = getQSLevel(total)
+  async function submit() {
+    if (!allAnswered) return
+    setSaving(true)
+    const totalScore = getTotalScore(answers)
+    const globalLevel = getQSGlobalLevel(totalScore)
+
+    // Build scores per pilier
+    const scores: Record<string, number> = {}
+    QS_PILIER_ORDER.forEach(p => {
+      scores[p] = getPilierScore(p, answers)
+    })
 
     await supabase.from('test_results').insert({
-      first_name: info.firstName,
-      last_name: info.lastName,
-      email: info.email,
-      phone: info.phone,
-      test_type: 'qs',
-      profile_key: null,
-      dominant_profile: level.label,
-      profile_name: `QS ${level.label} (${total}/450)`,
-      scores: computed,
+      test_type:        'qs',
+      first_name:       firstName,
+      last_name:        lastName,
+      email:            email || null,
+      phone:            phone || null,
+      scores,
+      dominant_profile: globalLevel,
       answers,
     })
 
     setSaving(false)
     setStep('result')
-    window.scrollTo(0, 0)
   }
 
-  async function handleDownloadPDF() {
+  async function downloadPDF() {
     if (!reportRef.current) return
-    setDownloading(true)
+    setDL(true)
     try {
-      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-        import('html2canvas'),
-        import('jspdf'),
-      ])
-      const container = reportRef.current
-      const pages = Array.from(container.children) as HTMLElement[]
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [PAGE_W, PAGE_H] })
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2, useCORS: true, allowTaint: true,
+        backgroundColor: '#ffffff',
+      })
+      const pdf = new jsPDF({ unit: 'px', format: [PAGE_W, PAGE_H], orientation: 'portrait' })
+      const pages = Math.ceil(canvas.height / canvas.width * PAGE_W / PAGE_H)
+      const pageHeightPx = Math.round(canvas.width * PAGE_H / PAGE_W)
 
-      for (let i = 0; i < pages.length; i++) {
-        const canvas = await html2canvas(pages[i], {
-          scale: 2, useCORS: true, allowTaint: true,
-          backgroundColor: '#ffffff', width: PAGE_W, height: PAGE_H,
-        })
-        if (i > 0) pdf.addPage([PAGE_W, PAGE_H], 'portrait')
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, PAGE_W, PAGE_H)
+      for (let i = 0; i < pages; i++) {
+        if (i > 0) pdf.addPage()
+        const srcY  = i * pageHeightPx
+        const chunk = document.createElement('canvas')
+        chunk.width  = canvas.width
+        chunk.height = Math.min(pageHeightPx, canvas.height - srcY)
+        const ctx = chunk.getContext('2d')!
+        ctx.drawImage(canvas, 0, srcY, canvas.width, chunk.height, 0, 0, canvas.width, chunk.height)
+        pdf.addImage(chunk.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, PAGE_W, PAGE_H * (chunk.height / pageHeightPx))
       }
-      pdf.save(`TEST QS_${info.firstName} ${info.lastName.toUpperCase()}.pdf`)
-    } catch (e) {
-      console.error('PDF error:', e)
+      pdf.save(`TEST QS_${firstName} ${lastName.toUpperCase()}.pdf`)
+    } finally {
+      setDL(false)
     }
-    setDownloading(false)
   }
+
+  const colMap: Record<string, string> = { forte: '#22c55e', moyenne: '#f59e0b', faible: '#ef4444' }
+  const lblMap: Record<string, string> = { forte: 'Forte', moyenne: 'Moyenne', faible: 'Faible' }
 
   // ── INTRO ──────────────────────────────────────────────────────────────────
-  if (step === 'intro') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-teal-50 flex items-center justify-center p-4">
-        <div className="max-w-xl w-full">
-          <div className="text-center mb-8">
-            <img src="/logo.png" alt="Success Compass" className="w-16 h-16 object-contain mx-auto mb-4" />
-            <div className="text-sm font-medium text-teal-600 uppercase tracking-widest mb-2">Test de mesure</div>
-            <h1 className="text-4xl font-black text-navy-900 leading-tight" style={{ color: '#1D3562' }}>
-              Quotient<br />
-              <span className="text-5xl">DE SUCCÈS</span>
-            </h1>
-            <p className="text-gray-600 mt-4 text-sm leading-relaxed max-w-md mx-auto">
-              Ce test évalue votre Quotient de Succès (QS) à travers <strong>15 piliers</strong> fondamentaux
-              répartis en 7 piliers principaux et 8 piliers secondaires.
-            </p>
+  if (step === 'intro') return (
+    <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ maxWidth: 560, width: '100%', background: '#fff', borderRadius: 20, padding: 48, boxShadow: '0 4px 32px rgba(0,0,0,0.08)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
+          <img src="/logo.png" alt="Success Compass" style={{ width: 64, height: 64, objectFit: 'contain' }} />
+          <div>
+            <div style={{ fontSize: 11, color: '#aaa', letterSpacing: 3, textTransform: 'uppercase' }}>Success Compass Academy</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: NAVY }}>Test Quotient de Succès</div>
           </div>
+        </div>
+        <p style={{ color: '#555', lineHeight: 1.8, marginBottom: 24 }}>
+          Ce test de <strong>30 questions</strong> évalue vos compétences clés sur <strong>13 piliers</strong> du succès
+          professionnel et personnel. Pour chaque affirmation, répondez spontanément selon votre comportement habituel.
+        </p>
+        <div style={{ display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>
+          {[['30', 'questions'], ['13', 'piliers'], ['~10 min', 'durée']].map(([v, l]) => (
+            <div key={l} style={{ flex: 1, minWidth: 100, background: '#f0f9fa', borderRadius: 12, padding: '14px 16px', textAlign: 'center' }}>
+              <div style={{ fontSize: 22, fontWeight: 900, color: TEAL }}>{v}</div>
+              <div style={{ fontSize: 11, color: '#777' }}>{l}</div>
+            </div>
+          ))}
+        </div>
+        <button onClick={() => setStep('info')} style={{
+          width: '100%', padding: '14px 0', background: NAVY, color: '#fff',
+          borderRadius: 12, border: 'none', fontSize: 16, fontWeight: 700, cursor: 'pointer',
+        }}>
+          Commencer →
+        </button>
+      </div>
+    </div>
+  )
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Ce que vous allez mesurer</h2>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                ['🧠', 'Intelligence Émotionnelle'],
-                ['💪', 'Résilience'],
-                ['🗣️', 'Communication'],
-                ['♟️', 'Pensée Stratégique'],
-                ['🔄', 'Adaptabilité'],
-                ['🎯', 'Détermination'],
-                ['⚡', 'Discipline'],
-                ['✨', 'Créativité'],
-                ['⏱️', 'Gestion du Temps'],
-                ['👑', 'Leadership'],
-                ['🦁', 'Confiance en Soi'],
-                ['⚖️', 'Éthique & Intégrité'],
-                ['🌊', 'Gestion du Stress'],
-                ['🚀', 'Auto-motivation'],
-                ['☀️', 'Optimisme'],
-              ].map(([icon, label]) => (
-                <div key={label} className="flex items-center gap-2 text-sm text-gray-700">
-                  <span>{icon}</span><span>{label}</span>
+  // ── INFO ──────────────────────────────────────────────────────────────────
+  if (step === 'info') return (
+    <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ maxWidth: 480, width: '100%', background: '#fff', borderRadius: 20, padding: 40, boxShadow: '0 4px 32px rgba(0,0,0,0.08)' }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Vos informations</div>
+        <p style={{ color: '#888', fontSize: 13, marginBottom: 28 }}>Elles apparaîtront sur votre rapport personnalisé.</p>
+        {[
+          { label: 'Prénom *', val: firstName, set: setFirst, placeholder: 'Votre prénom' },
+          { label: 'Nom *', val: lastName, set: setLast, placeholder: 'Votre nom' },
+          { label: 'Email', val: email, set: setEmail, placeholder: 'votre@email.com' },
+          { label: 'Téléphone', val: phone, set: setPhone, placeholder: '+212 6...' },
+        ].map(f => (
+          <div key={f.label} style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: '#555', display: 'block', marginBottom: 6 }}>{f.label}</label>
+            <input value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.placeholder}
+              style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+          <button onClick={() => setStep('intro')} style={{ flex: 1, padding: '12px 0', border: '1.5px solid #e5e7eb', background: '#fff', borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#555' }}>
+            ← Retour
+          </button>
+          <button onClick={() => setStep('questions')} disabled={!firstName || !lastName}
+            style={{ flex: 2, padding: '12px 0', background: firstName && lastName ? NAVY : '#c8cdd6', color: '#fff', borderRadius: 12, border: 'none', fontSize: 14, fontWeight: 700, cursor: firstName && lastName ? 'pointer' : 'not-allowed' }}>
+            Continuer →
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  // ── QUESTIONS ─────────────────────────────────────────────────────────────
+  if (step === 'questions') return (
+    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+      {/* Sticky header */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 10, background: NAVY, padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 12px rgba(0,0,0,0.15)' }}>
+        <div style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>Test Quotient de Succès</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 180, height: 6, background: 'rgba(255,255,255,0.2)', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${(answered / total) * 100}%`, background: TEAL, borderRadius: 3, transition: 'width 0.3s' }} />
+          </div>
+          <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{answered}/{total}</span>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 24px 120px' }}>
+        {/* Scale legend */}
+        <div style={{ background: '#fff', borderRadius: 14, padding: '16px 20px', marginBottom: 28, display: 'flex', gap: 8, alignItems: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          <span style={{ fontSize: 12, color: '#888', marginRight: 8 }}>Échelle :</span>
+          {QS_ANSWERS.map(a => (
+            <span key={a.value} style={{ fontSize: 12, fontWeight: 600, padding: '4px 12px', borderRadius: 20, background: a.value === 3 ? '#dcfce7' : a.value === 2 ? '#fef9c3' : '#fee2e2', color: a.value === 3 ? '#166534' : a.value === 2 ? '#854d0e' : '#991b1b' }}>
+              {a.label}
+            </span>
+          ))}
+        </div>
+
+        {/* Questions by pilier */}
+        {grouped.map(({ pilier, info, questions }) => (
+          <div key={pilier} style={{ background: '#fff', borderRadius: 16, padding: '24px 28px', marginBottom: 20, boxShadow: '0 1px 6px rgba(0,0,0,0.07)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+              <div style={{ width: 4, height: 24, background: TEAL, borderRadius: 2 }} />
+              <span style={{ fontWeight: 800, fontSize: 15, color: NAVY }}>{info.label}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {questions.map(q => (
+                <div key={q.id}>
+                  <div style={{ fontSize: 14, color: '#333', lineHeight: 1.6, marginBottom: 10 }}>
+                    <span style={{ fontWeight: 700, color: TEAL, marginRight: 6 }}>{q.id}.</span>
+                    {q.text}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {QS_ANSWERS.map(a => {
+                      const selected = answers[q.id] === a.value
+                      const bg = selected
+                        ? (a.value === 3 ? '#16a34a' : a.value === 2 ? '#d97706' : '#dc2626')
+                        : '#f8fafc'
+                      return (
+                        <button key={a.value} onClick={() => answer(q.id, a.value)} style={{
+                          flex: 1, padding: '9px 4px',
+                          background: bg, color: selected ? '#fff' : '#555',
+                          border: selected ? 'none' : '1.5px solid #e5e7eb',
+                          borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}>
+                          {a.label}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
+        ))}
+      </div>
 
-          <div className="bg-teal-50 rounded-xl border border-teal-100 p-4 mb-6 text-sm text-teal-800">
-            <strong>45 questions</strong> · Notation de 1 à 10 · Durée estimée : <strong>15–20 min</strong>
+      {/* Submit button */}
+      {allAnswered && (
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '16px 24px', background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'center' }}>
+          <button onClick={submit} disabled={saving} style={{ padding: '14px 48px', background: NAVY, color: '#fff', borderRadius: 14, border: 'none', fontSize: 16, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+            {saving ? 'Enregistrement…' : 'Voir mes résultats →'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+
+  // ── RESULT ────────────────────────────────────────────────────────────────
+  const totalScore  = getTotalScore(answers)
+  const globalLevel = getQSGlobalLevel(totalScore)
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+      <div style={{ maxWidth: 760, margin: '0 auto', padding: '40px 24px 80px' }}>
+        {/* Header card */}
+        <div style={{ background: NAVY, borderRadius: 20, padding: '32px 36px', marginBottom: 24, color: '#fff' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+            <img src="/logo.png" alt="SC" style={{ width: 56, height: 56, objectFit: 'contain' }} />
+            <div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', letterSpacing: 2 }}>RAPPORT QUOTIENT DE SUCCÈS</div>
+              <div style={{ fontSize: 20, fontWeight: 700 }}>{firstName} {lastName}</div>
+            </div>
           </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+            <span style={{ fontSize: 48, fontWeight: 900 }}>{totalScore}</span>
+            <span style={{ fontSize: 18, opacity: 0.6 }}>/ 90</span>
+            <span style={{ marginLeft: 12, fontSize: 13, fontWeight: 700, background: TEAL, padding: '4px 14px', borderRadius: 20 }}>{globalLevel}</span>
+          </div>
+        </div>
 
-          <button
-            onClick={() => setStep('info')}
-            className="w-full py-4 rounded-xl font-bold text-white text-lg transition-all hover:opacity-90 active:scale-98"
-            style={{ background: 'linear-gradient(135deg, #1D3562, #3BAAB5)' }}
-          >
-            Commencer le test →
+        {/* All 13 piliers */}
+        <div style={{ background: '#fff', borderRadius: 16, padding: '24px 28px', marginBottom: 24, boxShadow: '0 1px 6px rgba(0,0,0,0.07)' }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 20 }}>Vos 13 piliers de succès</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {QS_PILIER_ORDER.map(pilier => {
+              const info  = getPilierInfo(pilier)
+              const score = getPilierScore(pilier, answers)
+              const level = getQSLevel(score, info.maxScore)
+              const col   = colMap[level]
+              const pct   = Math.round((score / info.maxScore) * 100)
+              return (
+                <div key={pilier} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <div style={{ width: 3, height: 32, background: TEAL, borderRadius: 2, flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{info.label}</span>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: col }}>{lblMap[level]}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#555' }}>{score}/{info.maxScore}</span>
+                      </div>
+                    </div>
+                    <div style={{ height: 7, background: '#f0f0f0', borderRadius: 4, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: col, borderRadius: 4 }} />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Download */}
+        <div style={{ textAlign: 'center' }}>
+          <button onClick={downloadPDF} disabled={downloading} style={{
+            padding: '14px 40px', background: TEAL, color: '#fff', borderRadius: 14,
+            border: 'none', fontSize: 15, fontWeight: 700, cursor: downloading ? 'not-allowed' : 'pointer',
+            opacity: downloading ? 0.7 : 1,
+          }}>
+            {downloading ? 'Génération en cours…' : '📄 Télécharger mon rapport PDF'}
           </button>
         </div>
       </div>
-    )
-  }
-
-  // ── INFO ───────────────────────────────────────────────────────────────────
-  if (step === 'info') {
-    const ok = info.firstName.trim() && info.lastName.trim() && info.phone.trim()
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-teal-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full">
-          <div className="text-center mb-8">
-            <img src="/logo.png" alt="" className="w-12 h-12 object-contain mx-auto mb-3" />
-            <h2 className="text-2xl font-black" style={{ color: '#1D3562' }}>Vos informations</h2>
-            <p className="text-gray-500 text-sm mt-1">Ces informations apparaîtront sur votre rapport personnalisé</p>
-          </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Prénom <span className="text-red-500">*</span></label>
-                <input className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                  value={info.firstName} onChange={e => setInfo(p => ({ ...p, firstName: e.target.value }))} placeholder="Prénom" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Nom <span className="text-red-500">*</span></label>
-                <input className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                  value={info.lastName} onChange={e => setInfo(p => ({ ...p, lastName: e.target.value }))} placeholder="NOM" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Téléphone <span className="text-red-500">*</span></label>
-              <input className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                value={info.phone} onChange={e => setInfo(p => ({ ...p, phone: e.target.value }))} placeholder="06 XX XX XX XX" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Email</label>
-              <input type="email" className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                value={info.email} onChange={e => setInfo(p => ({ ...p, email: e.target.value }))} placeholder="email@exemple.ma" />
-            </div>
-            <button
-              disabled={!ok}
-              onClick={() => setStep('questions')}
-              className="w-full py-3 rounded-xl font-bold text-white transition-all disabled:opacity-40"
-              style={{ background: ok ? 'linear-gradient(135deg, #1D3562, #3BAAB5)' : '#9CA3AF' }}
-            >
-              Accéder au questionnaire →
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // ── QUESTIONS ──────────────────────────────────────────────────────────────
-  if (step === 'questions') {
-    const progress = (totalAnswered / totalQuestions) * 100
-
-    return (
-      <div className="min-h-screen bg-gray-50 py-6 px-4">
-        <div className="max-w-2xl mx-auto">
-          {/* Progress header */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-6 sticky top-4 z-10">
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <div className="text-xs font-medium text-gray-500">Quotient DE SUCCÈS</div>
-                <div className="text-sm font-semibold text-gray-900">{info.firstName} {info.lastName}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-black" style={{ color: '#1D3562' }}>{totalAnswered}</div>
-                <div className="text-xs text-gray-400">/ {totalQuestions}</div>
-              </div>
-            </div>
-            <div className="h-2 bg-gray-100 rounded-full">
-              <div
-                className="h-full rounded-full transition-all duration-300"
-                style={{ width: `${progress}%`, background: 'linear-gradient(90deg, #1D3562, #3BAAB5)' }}
-              />
-            </div>
-          </div>
-
-          {/* Questions grouped by pilier */}
-          {QS_PILIER_ORDER.map(pilierKey => {
-            const info2 = getPilierInfo(pilierKey)
-            const questions = QS_QUESTIONS.filter(q => q.pilier === pilierKey)
-            return (
-              <div key={pilierKey} className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 overflow-hidden">
-                <div className="px-5 py-3 border-b border-gray-50" style={{ background: 'linear-gradient(135deg, #1D356208, #3BAAB508)' }}>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      info2.type === 'principal'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-teal-100 text-teal-700'
-                    }`}>
-                      {info2.type === 'principal' ? 'Pilier principal' : 'Pilier secondaire'}
-                    </span>
-                    <span className="text-sm font-bold" style={{ color: '#1D3562' }}>{info2.label}</span>
-                  </div>
-                </div>
-
-                <div className="divide-y divide-gray-50">
-                  {questions.map((q, qi) => {
-                    const val = answers[q.id]
-                    return (
-                      <div key={q.id} className="px-5 py-4">
-                        <p className="text-sm text-gray-700 mb-3 leading-relaxed">
-                          <span className="text-xs font-bold text-gray-400 mr-2">{qi + 1}.</span>
-                          {q.text}
-                        </p>
-                        {/* Scale 1-10 */}
-                        <div className="space-y-2">
-                          <div className="flex gap-1.5 flex-wrap">
-                            {[1,2,3,4,5,6,7,8,9,10].map(n => (
-                              <button
-                                key={n}
-                                onClick={() => setAnswers(prev => ({ ...prev, [q.id]: n }))}
-                                className={`w-9 h-9 rounded-lg text-sm font-semibold transition-all ${
-                                  val === n
-                                    ? 'text-white shadow-sm scale-105'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                }`}
-                                style={val === n ? {
-                                  background: n <= 3 ? '#E8484A' : n <= 6 ? '#F5C00A' : '#3BAAB5',
-                                } : {}}
-                              >
-                                {n}
-                              </button>
-                            ))}
-                          </div>
-                          <div className="flex justify-between text-xs text-gray-400">
-                            <span>1 — Très faible</span>
-                            <span>10 — Excellent</span>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
-
-          {/* Submit */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mt-2">
-            {totalAnswered < totalQuestions && (
-              <p className="text-sm text-amber-600 mb-3 text-center">
-                ⚠️ {totalQuestions - totalAnswered} question(s) sans réponse
-              </p>
-            )}
-            <button
-              disabled={totalAnswered < totalQuestions || saving}
-              onClick={handleSubmit}
-              className="w-full py-4 rounded-xl font-bold text-white text-lg transition-all disabled:opacity-40"
-              style={{ background: totalAnswered >= totalQuestions ? 'linear-gradient(135deg, #1D3562, #3BAAB5)' : '#9CA3AF' }}
-            >
-              {saving ? 'Calcul en cours…' : 'Voir mes résultats →'}
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // ── RESULT ─────────────────────────────────────────────────────────────────
-  const total = QS_PILIER_ORDER.reduce((acc, p) => acc + (scores[p] ?? 0), 0)
-  const level = getQSLevel(total)
-  const forces = getTop5Forces(scores)
-  const axes = getBottom5Axes(scores)
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-teal-50 py-8 px-4">
-      <div className="max-w-2xl mx-auto">
-        {/* Score card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center mb-6">
-          <img src="/logo.png" alt="" className="w-12 h-12 object-contain mx-auto mb-4" />
-          <div className="text-sm font-medium tracking-widest text-gray-500 uppercase mb-1">Quotient DE SUCCÈS</div>
-          <div className="text-2xl font-black mb-4" style={{ color: '#1D3562' }}>
-            {info.firstName} {info.lastName.toUpperCase()}
-          </div>
-
-          {/* Score donut */}
-          <div className="flex items-center justify-center gap-6 mb-6">
-            <div
-              className="w-28 h-28 rounded-full flex flex-col items-center justify-center border-4"
-              style={{ borderColor: level.color, background: level.bg }}
-            >
-              <div className="text-3xl font-black" style={{ color: level.color }}>{total}</div>
-              <div className="text-xs text-gray-400">/450</div>
-            </div>
-            <div className="text-left">
-              <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Niveau de QS</div>
-              <div className="text-2xl font-black" style={{ color: level.color }}>{level.label}</div>
-            </div>
-          </div>
-
-          <p className="text-sm text-gray-600 leading-relaxed max-w-md mx-auto">{level.description}</p>
-        </div>
-
-        {/* Forces */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-4">
-          <h3 className="text-base font-bold mb-4" style={{ color: '#1D3562' }}>⭐ Vos 5 forces fondamentales</h3>
-          <div className="space-y-3">
-            {forces.map((p, i) => {
-              const pInfo = getPilierInfo(p)
-              const s = scores[p]
-              return (
-                <div key={p}>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm font-medium text-gray-800">
-                      <span className="text-teal-500 font-bold mr-1">{i + 1}.</span>
-                      {pInfo.content.forceTitle}
-                    </span>
-                    <span className="text-xs font-bold text-teal-600">{s}/30</span>
-                  </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full">
-                    <div className="h-full rounded-full" style={{ width: `${(s / 30) * 100}%`, background: '#3BAAB5' }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Axes */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
-          <h3 className="text-base font-bold mb-4" style={{ color: '#1D3562' }}>💡 Axes d'amélioration prioritaires</h3>
-          <div className="space-y-3">
-            {axes.map((p, i) => {
-              const pInfo = getPilierInfo(p)
-              const s = scores[p]
-              return (
-                <div key={p}>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm font-medium text-gray-800">
-                      <span className="text-red-400 font-bold mr-1">{i + 1}.</span>
-                      {pInfo.content.axeTitle}
-                    </span>
-                    <span className="text-xs font-bold text-red-400">{s}/30</span>
-                  </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full">
-                    <div className="h-full rounded-full" style={{ width: `${(s / 30) * 100}%`, background: '#E8484A' }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Download button */}
-        <button
-          onClick={handleDownloadPDF}
-          disabled={downloading}
-          className="w-full py-4 rounded-xl font-bold text-white text-lg mb-4 transition-all hover:opacity-90 disabled:opacity-60"
-          style={{ background: 'linear-gradient(135deg, #1D3562, #3BAAB5)' }}
-        >
-          {downloading ? 'Génération du PDF…' : '⬇️ Télécharger mon rapport PDF'}
-        </button>
-
-        <p className="text-center text-xs text-gray-400">
-          Rapport personnalisé Success Compass Academy · {new Date().toLocaleDateString('fr-MA')}
-        </p>
-      </div>
 
       {/* Hidden PDF template */}
-      <div style={{ position: 'fixed', left: -9999, top: 0, opacity: 0, pointerEvents: 'none' }}>
-        <QSReportTemplate
-          ref={reportRef}
-          firstName={info.firstName}
-          lastName={info.lastName}
-          scores={scores}
-        />
+      <div style={{ position: 'fixed', left: -9999, top: 0, zIndex: -1 }}>
+        <QSReportTemplate ref={reportRef} firstName={firstName} lastName={lastName} answers={answers} />
       </div>
     </div>
   )
