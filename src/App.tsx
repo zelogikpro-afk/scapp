@@ -22,10 +22,27 @@ import Tasks from './pages/tasks/Tasks'
 import Reports from './pages/reports/Reports'
 import Settings from './pages/settings/Settings'
 import Purchases from './pages/purchases/Purchases'
+import TestMappingPage from './pages/test/TestMappingPage'
+import TestIEPage from './pages/test/TestIEPage'
+import TestQSPage from './pages/test/TestQSPage'
+import Inscription from './pages/inscription/Inscription'
+import InscriptionPublique from './pages/inscription/InscriptionPublique'
+import ProspectsList from './pages/inscription/ProspectsList'
+import EspaceLogin from './pages/espace/EspaceLogin'
+import EspaceLayout from './pages/espace/EspaceLayout'
+import EspaceAccueil from './pages/espace/EspaceAccueil'
+import EspaceEnregistrements from './pages/espace/EspaceEnregistrements'
+import EspaceDocuments from './pages/espace/EspaceDocuments'
+import EspaceTests from './pages/espace/EspaceTests'
+import EspaceNotes from './pages/espace/EspaceNotes'
+import EspaceCertificat from './pages/espace/EspaceCertificat'
+import ElearningAdmin from './pages/elearning/ElearningAdmin'
 
 import type { Role } from './types'
 
 const ROLE_ACCESS: Record<string, Role[]> = {
+  '/inscription':       ['super_admin', 'admin', 'crm_manager'],
+  '/inscriptions':      ['super_admin', 'admin', 'crm_manager'],
   '/crm':               ['super_admin', 'admin', 'sales_agent', 'crm_manager'],
   '/participants':      ['super_admin', 'admin', 'coach', 'crm_manager'],
   '/coaching/packs':    ['super_admin', 'admin', 'coach', 'crm_manager'],
@@ -80,7 +97,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (user?.id) fetchAll(user.id)
+    if (user?.id) fetchAll(user.id, user.role)
   }, [user?.id])
 
   return (
@@ -88,6 +105,20 @@ export default function App() {
       <Toaster position="top-right" toastOptions={{ style: { borderRadius: '12px', fontSize: '14px' } }} />
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/s/inscription" element={<InscriptionPublique />} />
+        <Route path="/test/mapping" element={<TestMappingPage />} />
+        <Route path="/test/ie" element={<TestIEPage />} />
+        <Route path="/test/qs" element={<TestQSPage />} />
+        <Route path="/espace" element={<EspaceLogin />} />
+        <Route path="/espace" element={<EspaceLayout />}>
+          <Route path="accueil"          element={<EspaceAccueil />} />
+          <Route path="enregistrements"  element={<EspaceEnregistrements />} />
+          <Route path="documents"        element={<EspaceDocuments />} />
+          <Route path="tests"            element={<EspaceTests />} />
+          <Route path="notes"            element={<EspaceNotes />} />
+          <Route path="certificat"       element={<EspaceCertificat />} />
+          <Route index                   element={<Navigate to="/espace/accueil" replace />} />
+        </Route>
         <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
           <Route index element={<Dashboard />} />
           <Route path="crm"               element={<RequireRole path="/crm"><CRM /></RequireRole>} />
@@ -102,8 +133,11 @@ export default function App() {
           <Route path="certificates"      element={<RequireRole path="/certificates"><Certificates /></RequireRole>} />
           <Route path="tasks"             element={<Tasks />} />
           <Route path="purchases"         element={<RequireRole path="/purchases"><Purchases /></RequireRole>} />
+          <Route path="inscription"         element={<RequireRole path="/inscription"><Inscription /></RequireRole>} />
+          <Route path="inscriptions"        element={<RequireRole path="/inscriptions"><ProspectsList /></RequireRole>} />
           <Route path="reports"           element={<RequireRole path="/reports"><Reports /></RequireRole>} />
           <Route path="settings"          element={<RequireRole path="/settings"><Settings /></RequireRole>} />
+          <Route path="elearning"         element={<ElearningAdmin />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
