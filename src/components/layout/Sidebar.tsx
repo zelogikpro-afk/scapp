@@ -3,7 +3,7 @@ import { cn } from '../../lib/utils'
 import {
   LayoutDashboard, Users, UserCheck, Calendar, CreditCard,
   BarChart3, Settings, BookOpen, ClipboardList, FileText,
-  Award, CheckSquare, Layers, ChevronRight, X, Compass, ShoppingCart
+  Award, CheckSquare, Layers, ChevronRight, X, Compass, ShoppingCart, UserPlus, GraduationCap
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import type { Role } from '../../types'
@@ -26,6 +26,8 @@ const navItems: NavItem[] = [
   { label: 'Tableau de bord', icon: LayoutDashboard, path: '/',          roles: ['super_admin', 'admin', 'sales_agent', 'coach', 'crm_manager'] },
   { label: 'CRM',             icon: Users,           path: '/crm',        roles: ['super_admin', 'admin', 'sales_agent', 'crm_manager'] },
   { label: 'Participants',    icon: UserCheck,        path: '/participants',roles: ['super_admin', 'admin', 'coach', 'crm_manager'] },
+  { label: 'Inscription',        icon: UserPlus,      path: '/inscription',  roles: ['super_admin', 'admin', 'crm_manager'] },
+  { label: 'Inscriptions reçues', icon: ClipboardList, path: '/inscriptions', roles: ['super_admin', 'admin', 'crm_manager'] },
   {
     label: 'Coaching', icon: BookOpen, path: '/coaching', roles: ['super_admin', 'admin', 'coach', 'crm_manager'],
     children: [
@@ -41,6 +43,7 @@ const navItems: NavItem[] = [
   { label: 'Certificats', icon: Award,        path: '/certificates',  roles: ['super_admin', 'admin', 'crm_manager'] },
   { label: 'Tâches',      icon: CheckSquare,  path: '/tasks',         roles: ['super_admin', 'admin', 'sales_agent', 'coach', 'crm_manager'] },
   { label: 'Achats',      icon: ShoppingCart, path: '/purchases',     roles: ['super_admin', 'admin', 'crm_manager'] },
+  { label: 'E-Learning',   icon: GraduationCap, path: '/elearning',    roles: ['super_admin', 'admin'] },
   { label: 'Rapports',    icon: BarChart3,    path: '/reports',       roles: ['super_admin', 'admin'] },
   { label: 'Paramètres',  icon: Settings,     path: '/settings',      roles: ['super_admin', 'admin'] },
 ]
@@ -127,9 +130,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       )}>
         {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-sidebar-border flex-shrink-0">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
-            <Compass className="w-5 h-5 text-white" />
-          </div>
+          <img src="/logo.png" alt="Success Compass" className="w-10 h-10 object-contain flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="text-white text-sm font-semibold truncate">Success Compass</div>
             <div className="text-sidebar-muted text-xs">Coaching & Formation</div>

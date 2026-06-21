@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ChevronLeft, ChevronRight, Plus, Video, MapPin, Clock, Trash2 } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { ChevronLeft, ChevronRight, Plus, Video, MapPin, Clock, Trash2, User, CalendarDays, Pencil } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -9,10 +9,69 @@ import { Input } from '../../components/ui/Input'
 import { useAppStore } from '../../store/appStore'
 import { useAuthStore } from '../../store/authStore'
 import { formatDate } from '../../lib/utils'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOfWeek, isSameMonth, isSameDay, addMonths, subMonths, parseISO, isToday } from 'date-fns'
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOfWeek, isSameMonth, isSameDay, addMonths, subMonths, parseISO, isToday, addWeeks, addMinutes } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import type { Appointment } from '../../types'
+import type { Appointment, CoachingPack, Participant } from '../../types'
 import toast from 'react-hot-toast'
+
+const DAY_MAP: Record<string, number> = {
+  Dimanche: 0, Lundi: 1, Mardi: 2, Mercredi: 3, Jeudi: 4, Vendredi: 5, Samedi: 6,
+}
+
+function addMinutesToTime(time: string, minutes: number): string {
+  const [h, m] = time.split(':').map(Number)
+  const d = addMinutes(new Date(2000, 0, 1, h, m), minutes)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+function generateSlotEvents(
+  packs: CoachingPack[],
+  participantsMap: Record<string, Participant>,
+  rangeStart: Date,
+  rangeEnd: Date,
+): Appointment[] {
+  const events: Appointment[] = []
+  for (const pack of packs) {
+    if (!pack.weeklySlot || pack.status === 'expired' || pack.status === 'completed') continue
+    const [day, time] = pack.weeklySlot.split(' ')
+    const targetDay = DAY_MAP[day]
+    if (targetDay === undefined || !time) continue
+
+    const packStart = parseISO(pack.purchaseDate)
+    const packEnd = pack.expirationDate ? parseISO(pack.expirationDate) : rangeEnd
+
+    // Find first occurrence of targetDay at or after max(packStart, rangeStart)
+    const windowStart = packStart > rangeStart ? packStart : rangeStart
+    let cur = new Date(windowStart)
+    while (cur.getDay() !== targetDay) cur = addWeeks(cur, 0) && new Date(cur.getTime() + 86400000)
+
+    const remaining = pack.totalSessions - pack.usedSessions
+    const participant = participantsMap[pack.participantId]
+    const name = participant ? `${participant.firstName} ${participant.lastName}` : ''
+    let count = 0
+
+    while (cur <= rangeEnd && cur <= packEnd && count < remaining) {
+      events.push({
+        id: `slot-${pack.id}-${cur.toISOString()}`,
+        title: `Coaching · ${name}`,
+        participantId: pack.participantId,
+        participantName: name,
+        coachId: '',
+        coachName: '',
+        programType: 'coaching',
+        date: format(cur, 'yyyy-MM-dd'),
+        startTime: time,
+        endTime: addMinutesToTime(time, 50),
+        status: 'scheduled',
+        reminderSent: false,
+        color: '#0d9488',
+      })
+      cur = addWeeks(cur, 1)
+      count++
+    }
+  }
+  return events
+}
 
 const STATUS_COLORS: Record<string, string> = {
   scheduled: 'bg-blue-500',
@@ -21,10 +80,11 @@ const STATUS_COLORS: Record<string, string> = {
   rescheduled: 'bg-amber-500',
 }
 
-function AppointmentCard({ apt }: { apt: Appointment }) {
+function AppointmentCard({ apt, onClick }: { apt: Appointment; onClick: () => void }) {
   return (
     <div
-      className="rounded-lg p-2.5 mb-1.5 cursor-pointer hover:opacity-90 transition-opacity text-white text-xs"
+      onClick={onClick}
+      className="rounded-lg p-2.5 mb-1.5 cursor-pointer hover:opacity-90 hover:scale-[1.01] transition-all text-white text-xs"
       style={{ backgroundColor: apt.color || '#3b82f6' }}
     >
       <p className="font-semibold truncate">{apt.title}</p>
@@ -42,14 +102,51 @@ const EMPTY_APT = {
 }
 
 export default function CalendarPage() {
-  const { appointments, participants, addAppointment, deleteAppointment } = useAppStore()
+  const { appointments, participants, coachingPacks, coachingSessions, addAppointment, updateAppointment, deleteAppointment } = useAppStore()
   const { user } = useAuthStore()
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [view, setView] = useState<'month' | 'week' | 'agenda'>('month')
   const [selectedApt, setSelectedApt] = useState<Appointment | null>(null)
+  const [showDetail, setShowDetail] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [editForm, setEditForm] = useState<any>({})
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ ...EMPTY_APT })
   const [loading, setLoading] = useState(false)
+
+  const openDetail = (apt: Appointment) => {
+    setSelectedApt(apt)
+    setEditMode(false)
+    setEditForm({
+      title: apt.title, participantId: apt.participantId ?? '',
+      date: apt.date, startTime: apt.startTime, endTime: apt.endTime,
+      location: apt.location ?? '', meetLink: apt.meetLink ?? '',
+      notes: apt.notes ?? '', status: apt.status, color: apt.color ?? '#3B82F6',
+    })
+    setShowDetail(true)
+  }
+  const handleDelete = async (apt: Appointment) => {
+    if (!confirm('Supprimer ce rendez-vous ?')) return
+    await deleteAppointment(apt.id)
+    setShowDetail(false)
+    toast.success('RDV supprimé')
+  }
+  const handleEdit = async () => {
+    if (!selectedApt) return
+    setLoading(true)
+    try {
+      const p = participants.find(x => x.id === editForm.participantId)
+      await updateAppointment(selectedApt.id, {
+        ...editForm,
+        participantName: p ? `${p.firstName} ${p.lastName}` : selectedApt.participantName,
+      })
+      setSelectedApt(a => a ? { ...a, ...editForm, participantName: p ? `${p.firstName} ${p.lastName}` : a.participantName } : a)
+      setEditMode(false)
+      toast.success('RDV modifié !')
+    } catch { toast.error('Erreur lors de la modification') }
+    setLoading(false)
+  }
+  const setEF = (k: string, v: any) => setEditForm((f: any) => ({ ...f, [k]: v }))
 
   const setF = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }))
 
@@ -95,13 +192,51 @@ export default function CalendarPage() {
 
   const weekDays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
 
+  const participantsMap = useMemo(() =>
+    Object.fromEntries(participants.map(p => [p.id, p])),
+    [participants]
+  )
+
+  const slotEvents = useMemo(() =>
+    generateSlotEvents(coachingPacks, participantsMap, calStart, calEnd),
+    [coachingPacks, participantsMap, calStart.toISOString(), calEnd.toISOString()]
+  )
+
+  // Convert coaching sessions into calendar events
+  const sessionEvents = useMemo(() => coachingSessions.map(s => {
+    const pack = coachingPacks.find(p => p.id === s.packId)
+    const participant = participantsMap[s.participantId]
+    const name = participant ? `${participant.firstName} ${participant.lastName}` : ''
+    const endTime = addMinutesToTime(s.time, s.duration ?? 50)
+    const colorMap: Record<string, string> = { completed: '#10b981', cancelled: '#ef4444', no_show: '#f59e0b', scheduled: '#6366f1' }
+    return {
+      id: `session-${s.id}`,
+      title: `Séance #${s.sessionNumber}${pack ? ` · ${pack.name}` : ''}`,
+      participantId: s.participantId,
+      participantName: name,
+      coachId: s.coachId ?? '',
+      coachName: 'SOFYA EL QOUASSI',
+      programType: 'coaching' as const,
+      date: s.date,
+      startTime: s.time,
+      endTime,
+      meetLink: s.meetLink,
+      notes: s.summary,
+      status: s.status === 'completed' ? 'completed' : s.status === 'cancelled' ? 'cancelled' : 'scheduled',
+      reminderSent: false,
+      color: colorMap[s.status] ?? '#6366f1',
+    } as typeof appointments[0]
+  }), [coachingSessions, coachingPacks, participantsMap])
+
+  const allAppointments = useMemo(() => [...appointments, ...slotEvents, ...sessionEvents], [appointments, slotEvents, sessionEvents])
+
   function getAptsForDay(day: Date) {
-    return appointments.filter(a => isSameDay(parseISO(a.date), day))
+    return allAppointments.filter(a => isSameDay(parseISO(a.date), day))
   }
 
-  const upcomingApts = appointments
+  const upcomingApts = allAppointments
     .filter(a => parseISO(a.date) >= new Date())
-    .sort((a, b) => a.date.localeCompare(b.date))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
     .slice(0, 10)
 
   return (
@@ -166,7 +301,7 @@ export default function CalendarPage() {
                     {format(day, 'd')}
                   </div>
                   {dayApts.slice(0, 3).map(apt => (
-                    <AppointmentCard key={apt.id} apt={apt} />
+                    <AppointmentCard key={apt.id} apt={apt} onClick={() => openDetail(apt)} />
                   ))}
                   {dayApts.length > 3 && (
                     <div className="text-xs text-gray-400 pl-1">+{dayApts.length - 3} autres</div>
@@ -186,7 +321,7 @@ export default function CalendarPage() {
             ) : (
               <div className="space-y-3">
                 {upcomingApts.map(apt => (
-                  <div key={apt.id} className="flex gap-3 items-start group">
+                  <div key={apt.id} onClick={() => openDetail(apt)} className="flex gap-3 items-start cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg p-1 -mx-1 transition-colors">
                     <div className="w-1 h-12 rounded-full flex-shrink-0 mt-1" style={{ background: apt.color || '#3b82f6' }} />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">{apt.title}</p>
@@ -194,24 +329,12 @@ export default function CalendarPage() {
                         <Clock className="w-3 h-3" />
                         {formatDate(apt.date)} · {apt.startTime}
                       </div>
-                      {apt.meetLink && (
-                        <div className="flex items-center gap-1.5 mt-0.5 text-xs text-blue-500">
-                          <Video className="w-3 h-3" />
-                          <a href={apt.meetLink} target="_blank" rel="noreferrer" className="hover:underline" onClick={e => e.stopPropagation()}>Google Meet</a>
-                        </div>
-                      )}
                       {apt.location && (
                         <div className="flex items-center gap-1.5 mt-0.5 text-xs text-gray-400">
                           <MapPin className="w-3 h-3" /> {apt.location}
                         </div>
                       )}
-                      <Badge variant={apt.status === 'scheduled' ? 'info' : 'success'} size="sm" className="mt-1">
-                        {apt.status === 'scheduled' ? 'Programmé' : apt.status}
-                      </Badge>
                     </div>
-                    <button onClick={async () => { if (!confirm('Supprimer ce RDV ?')) return; await deleteAppointment(apt.id); toast.success('RDV supprimé') }} className="opacity-0 group-hover:opacity-100 p-1 rounded text-gray-300 hover:text-red-500 transition-all flex-shrink-0">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
                   </div>
                 ))}
               </div>
@@ -223,10 +346,11 @@ export default function CalendarPage() {
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Légende</h3>
             <div className="space-y-2">
               {[
-                { color: '#3b82f6', label: 'Séance coaching' },
-                { color: '#8b5cf6', label: 'Session burn-out' },
-                { color: '#f59e0b', label: 'Entretien découverte' },
-                { color: '#10b981', label: 'Formation' },
+                { color: '#0d9488', label: 'Créneau fixe (auto)' },
+                { color: '#6366f1', label: 'Séance programmée' },
+                { color: '#10b981', label: 'Séance complétée' },
+                { color: '#ef4444', label: 'Séance annulée' },
+                { color: '#3b82f6', label: 'RDV manuel' },
               ].map(({ color, label }) => (
                 <div key={label} className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: color }} />
@@ -237,6 +361,126 @@ export default function CalendarPage() {
           </Card>
         </div>
       </div>
+
+      {/* Detail / Edit modal */}
+      {selectedApt && (
+        <Modal open={showDetail} onClose={() => { setShowDetail(false); setEditMode(false) }}
+          title={editMode ? 'Modifier le rendez-vous' : 'Rendez-vous'} size="md">
+          {!editMode ? (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-3 h-3 rounded-sm mt-1.5 flex-shrink-0" style={{ background: selectedApt.color || '#3b82f6' }} />
+                <div>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100 text-base">{selectedApt.title}</p>
+                  {selectedApt.id.startsWith('slot-') && (
+                    <span className="text-xs text-teal-600 dark:text-teal-400 font-medium">Créneau fixe (auto)</span>
+                  )}
+                  {selectedApt.id.startsWith('session-') && (
+                    <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">Séance enregistrée</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2.5 text-sm">
+                <div className="flex items-center gap-2.5 text-gray-600 dark:text-gray-400">
+                  <CalendarDays className="w-4 h-4 flex-shrink-0 text-gray-400" />
+                  <span>{formatDate(selectedApt.date)} · {selectedApt.startTime} — {selectedApt.endTime}</span>
+                </div>
+                {selectedApt.participantName && (
+                  <div className="flex items-center gap-2.5 text-gray-600 dark:text-gray-400">
+                    <User className="w-4 h-4 flex-shrink-0 text-gray-400" />
+                    <span>{selectedApt.participantName}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2.5 text-gray-600 dark:text-gray-400">
+                  <User className="w-4 h-4 flex-shrink-0 text-violet-400" />
+                  <span>Coach : <span className="font-medium text-gray-800 dark:text-gray-200">SOFYA EL QOUASSI</span></span>
+                </div>
+                {selectedApt.coachName && (
+                  <div className="flex items-center gap-2.5 text-gray-500 dark:text-gray-500 text-xs">
+                    <User className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>Créé par : {selectedApt.coachName}</span>
+                  </div>
+                )}
+                {selectedApt.location && (
+                  <div className="flex items-center gap-2.5 text-gray-600 dark:text-gray-400">
+                    <MapPin className="w-4 h-4 flex-shrink-0 text-gray-400" />
+                    <span>{selectedApt.location}</span>
+                  </div>
+                )}
+                {selectedApt.meetLink && (
+                  <div className="flex items-center gap-2.5 text-blue-500">
+                    <Video className="w-4 h-4 flex-shrink-0" />
+                    <a href={selectedApt.meetLink} target="_blank" rel="noreferrer" className="hover:underline truncate">{selectedApt.meetLink}</a>
+                  </div>
+                )}
+                {selectedApt.notes && (
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-gray-600 dark:text-gray-400 text-xs leading-relaxed">
+                    {selectedApt.notes}
+                  </div>
+                )}
+                <Badge variant={selectedApt.status === 'scheduled' ? 'info' : selectedApt.status === 'completed' ? 'success' : 'danger'}>
+                  {selectedApt.status === 'scheduled' ? 'Programmé' : selectedApt.status === 'completed' ? 'Terminé' : selectedApt.status === 'cancelled' ? 'Annulé' : selectedApt.status}
+                </Badge>
+              </div>
+
+              <div className="flex justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
+                {!selectedApt.id.startsWith('slot-') && !selectedApt.id.startsWith('session-') ? (
+                  <button onClick={() => handleDelete(selectedApt)} className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 transition-colors">
+                    <Trash2 className="w-4 h-4" /> Supprimer
+                  </button>
+                ) : <div />}
+                <div className="flex gap-2">
+                  {!selectedApt.id.startsWith('slot-') && !selectedApt.id.startsWith('session-') && (
+                    <Button variant="ghost" size="sm" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => setEditMode(true)}>Modifier</Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => setShowDetail(false)}>Fermer</Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <Input label="Titre *" value={editForm.title} onChange={e => setEF('title', e.target.value)} />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Participant</label>
+                <select value={editForm.participantId} onChange={e => setEF('participantId', e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">— Aucun —</option>
+                  {participants.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <Input label="Date *" type="date" value={editForm.date} onChange={e => setEF('date', e.target.value)} />
+                <Input label="Début" type="time" value={editForm.startTime} onChange={e => setEF('startTime', e.target.value)} />
+                <Input label="Fin" type="time" value={editForm.endTime} onChange={e => setEF('endTime', e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Input label="Lieu" value={editForm.location} onChange={e => setEF('location', e.target.value)} />
+                <Input label="Lien Meet" value={editForm.meetLink} onChange={e => setEF('meetLink', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Statut</label>
+                <select value={editForm.status} onChange={e => setEF('status', e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="scheduled">Programmé</option>
+                  <option value="completed">Terminé</option>
+                  <option value="cancelled">Annulé</option>
+                  <option value="rescheduled">Reporté</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
+                <textarea value={editForm.notes} onChange={e => setEF('notes', e.target.value)} rows={2}
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="flex justify-end gap-3 pt-2 border-t border-gray-100 dark:border-gray-800">
+                <Button variant="ghost" onClick={() => setEditMode(false)}>Annuler</Button>
+                <Button variant="primary" onClick={handleEdit} disabled={loading}>{loading ? 'Enregistrement…' : 'Enregistrer'}</Button>
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
 
       <Modal open={showModal} onClose={() => setShowModal(false)} title="Nouveau rendez-vous" size="md">
         <div className="space-y-4">

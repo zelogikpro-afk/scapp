@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Save, Building, Palette, Shield, CreditCard, BookOpen, Sun, Moon, Plus, CheckCircle, Zap, RefreshCw, Eye, EyeOff } from 'lucide-react'
+import { Save, Building, Palette, Shield, CreditCard, BookOpen, Sun, Moon, Plus, CheckCircle, Zap, RefreshCw, Eye, EyeOff, Pencil, Trash2 } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -8,8 +8,59 @@ import { Avatar } from '../../components/ui/Avatar'
 import { Modal } from '../../components/ui/Modal'
 import { useAuthStore } from '../../store/authStore'
 import { supabase } from '../../lib/supabase'
+import { TRAINING_PROGRAMS } from '../../lib/mockData'
 import type { Role } from '../../types'
 import toast from 'react-hot-toast'
+
+interface Program { id: string; name: string; level: string; durationDays: number; price: number; maxCapacity: number; description: string; isActive: boolean; color: string }
+
+const EMPTY_PROG: Omit<Program, 'id'> = { name: '', level: '', durationDays: 30, price: 0, maxCapacity: 20, description: '', isActive: true, color: '#3b82f6' }
+
+function ProgramModal({ program, onClose, onSave }: { program: Program | null; onClose: () => void; onSave: (p: Program) => void }) {
+  const [form, setForm] = useState<Omit<Program, 'id'>>(program ? { name: program.name, level: program.level, durationDays: program.durationDays, price: program.price, maxCapacity: program.maxCapacity, description: program.description, isActive: program.isActive, color: program.color } : { ...EMPTY_PROG })
+  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }))
+
+  function handleSave() {
+    if (!form.name) return toast.error('Nom requis')
+    onSave({ id: program?.id ?? `tp-${Date.now()}`, ...form, durationDays: Number(form.durationDays), price: Number(form.price), maxCapacity: Number(form.maxCapacity) })
+    onClose()
+  }
+
+  return (
+    <Modal open onClose={onClose} title={program ? 'Modifier le programme' : 'Nouveau programme'} size="md">
+      <div className="space-y-4">
+        <Input label="Nom du programme *" value={form.name} onChange={e => set('name', e.target.value)} placeholder="ex: Coach de vie et Développement Personnel" />
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Niveau" value={form.level} onChange={e => set('level', e.target.value)} placeholder="ex: Niveau 1" />
+          <Input label="Durée (jours)" type="number" value={form.durationDays} onChange={e => set('durationDays', e.target.value)} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Prix (MAD)" type="number" value={form.price} onChange={e => set('price', e.target.value)} />
+          <Input label="Capacité max" type="number" value={form.maxCapacity} onChange={e => set('maxCapacity', e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Description</label>
+          <textarea rows={3} value={form.description} onChange={e => set('description', e.target.value)}
+            className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+        </div>
+        <div className="flex items-center gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Couleur</label>
+            <input type="color" value={form.color} onChange={e => set('color', e.target.value)} className="w-10 h-9 rounded cursor-pointer border border-gray-200" />
+          </div>
+          <div className="flex items-center gap-2 mt-4">
+            <input type="checkbox" id="prog-active" checked={form.isActive} onChange={e => set('isActive', e.target.checked)} className="rounded" />
+            <label htmlFor="prog-active" className="text-sm text-gray-700 dark:text-gray-300">Programme actif</label>
+          </div>
+        </div>
+        <div className="flex gap-2 justify-end pt-1">
+          <Button variant="ghost" onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={handleSave}>Enregistrer</Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super Admin', admin: 'Admin', sales_agent: 'Agent Commercial', coach: 'Coach', crm_manager: 'Responsable CRM',
@@ -304,6 +355,9 @@ export default function Settings() {
   const [showInvite, setShowInvite] = useState(false)
   const [editUser, setEditUser] = useState<ProfileUser | null>(null)
   const [users, setUsers] = useState<ProfileUser[]>([])
+  const [programs, setPrograms] = useState<Program[]>(TRAINING_PROGRAMS as Program[])
+  const [editProgram, setEditProgram] = useState<Program | null | 'new'>('new' as any)
+  const [showProgramModal, setShowProgramModal] = useState(false)
 
   async function fetchUsers() {
     const { data } = await supabase
@@ -316,7 +370,33 @@ export default function Settings() {
     })))
   }
 
+  async function fetchPrograms() {
+    const { data } = await supabase.from('app_settings').select('value').eq('key', 'training_programs').single()
+    if (data?.value) {
+      try { setPrograms(JSON.parse(data.value)) } catch {}
+    }
+  }
+
+  async function savePrograms(updated: Program[]) {
+    setPrograms(updated)
+    await supabase.from('app_settings').upsert({ key: 'training_programs', value: JSON.stringify(updated), updated_at: new Date().toISOString() })
+    toast.success('Programme sauvegardé')
+  }
+
+  function handleSaveProgram(prog: Program) {
+    const updated = programs.some(p => p.id === prog.id)
+      ? programs.map(p => p.id === prog.id ? prog : p)
+      : [...programs, prog]
+    savePrograms(updated)
+  }
+
+  function handleDeleteProgram(id: string) {
+    if (!confirm('Supprimer ce programme ?')) return
+    savePrograms(programs.filter(p => p.id !== id))
+  }
+
   useEffect(() => { if (tab === 'users') fetchUsers() }, [tab])
+  useEffect(() => { fetchPrograms() }, [])
 
   return (
     <div className="space-y-5">
@@ -425,24 +505,36 @@ export default function Settings() {
             <Card>
               <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-5">Programmes</h3>
               <div className="space-y-3">
-                {[
-                  { name: 'Coach de Vie Niveau 1', price: '12 000 MAD', sessions: '30 jours' },
-                  { name: 'Coach de Vie Niveau 2', price: '15 000 MAD', sessions: '45 jours' },
-                  { name: 'Life Coach Certification', price: '25 000 MAD', sessions: '60 jours' },
-                  { name: 'Pack Essentiel 6 séances', price: '5 400 MAD', sessions: '6 séances' },
-                  { name: 'Pack Premium 10 séances', price: '8 000 MAD', sessions: '10 séances' },
-                ].map(prog => (
-                  <div key={prog.name} className="flex items-center gap-4 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{prog.name}</p>
-                      <p className="text-xs text-gray-400">{prog.sessions}</p>
+                {programs.map(prog => (
+                  <div key={prog.id} className="flex items-center gap-4 p-3 rounded-xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                    <div className="w-3 h-10 rounded-full flex-shrink-0" style={{ background: prog.color }} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{prog.name}</p>
+                        {prog.level && <Badge variant="default" size="sm">{prog.level}</Badge>}
+                        {!prog.isActive && <Badge variant="danger" size="sm">Inactif</Badge>}
+                      </div>
+                      <p className="text-xs text-gray-400">{prog.durationDays} jours · Capacité : {prog.maxCapacity}</p>
                     </div>
-                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{prog.price}</p>
-                    <Button variant="outline" size="sm">Modifier</Button>
+                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex-shrink-0">
+                      {prog.price.toLocaleString('fr-FR')} MAD
+                    </p>
+                    <button onClick={() => { setEditProgram(prog); setShowProgramModal(true) }}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => handleDeleteProgram(prog.id)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 ))}
+                {programs.length === 0 && <p className="text-sm text-gray-400 text-center py-4">Aucun programme</p>}
               </div>
-              <Button variant="primary" className="mt-4" icon={<Plus className="w-4 h-4" />}>Ajouter un programme</Button>
+              <Button variant="primary" className="mt-4" icon={<Plus className="w-4 h-4" />}
+                onClick={() => { setEditProgram(null); setShowProgramModal(true) }}>
+                Ajouter un programme
+              </Button>
             </Card>
           )}
 
@@ -470,6 +562,13 @@ export default function Settings() {
       {/* Modals */}
       {showInvite && <InviteModal onClose={() => setShowInvite(false)} onCreated={fetchUsers} />}
       {editUser && <EditUserModal user={editUser} onClose={() => setEditUser(null)} onSaved={fetchUsers} />}
+      {showProgramModal && (
+        <ProgramModal
+          program={editProgram && editProgram !== 'new' ? editProgram as Program : null}
+          onClose={() => setShowProgramModal(false)}
+          onSave={handleSaveProgram}
+        />
+      )}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
-import { Plus, Search, User, Phone, Mail, Tag } from 'lucide-react'
+import { Plus, Search, Phone, Mail } from 'lucide-react'
+import DateRangeFilter, { type Preset, type DateRange, getRange, inRange } from '../../components/ui/DateRangeFilter'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -23,14 +24,23 @@ export default function Participants() {
   const { participants, coachingPacks } = useAppStore()
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'coaching' | 'training' | 'both'>('all')
+  const [paymentModeFilter, setPaymentModeFilter] = useState('all')
+  const [participationModeFilter, setParticipationModeFilter] = useState('all')
+  const [preset, setPreset] = useState<Preset>('all')
+  const [range, setRange] = useState<DateRange>(getRange('all'))
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+
+  const handleDateChange = (p: Preset, r: DateRange) => { setPreset(p); setRange(r) }
 
   const filtered = useMemo(() => participants.filter(p => {
     const matchSearch = search === '' || `${p.firstName} ${p.lastName} ${p.email} ${p.phone} ${p.profession}`.toLowerCase().includes(search.toLowerCase())
     const matchType = typeFilter === 'all' || p.type === typeFilter
-    return matchSearch && matchType && p.isActive
-  }), [participants, search, typeFilter])
+    const matchPayMode = paymentModeFilter === 'all' || (p as any).paymentMode === paymentModeFilter
+    const matchPartMode = participationModeFilter === 'all' || (p as any).participationMode === participationModeFilter
+    const matchDate = inRange(p.createdAt, range)
+    return matchSearch && matchType && matchPayMode && matchPartMode && matchDate && p.isActive
+  }), [participants, search, typeFilter, paymentModeFilter, participationModeFilter, range])
 
   return (
     <div className="space-y-5">
@@ -64,10 +74,26 @@ export default function Participants() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 flex-wrap">
+      <div className="flex gap-3 flex-wrap items-center">
         <div className="flex-1 min-w-48">
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un participant…" icon={<Search className="w-4 h-4" />} />
         </div>
+        <DateRangeFilter value={preset} onChange={handleDateChange} />
+        <select value={paymentModeFilter} onChange={e => setPaymentModeFilter(e.target.value)}
+          className="text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="all">Tous les modes paiement</option>
+          <option value="cash">Comptant</option>
+          <option value="echelonne">Échelonné</option>
+          <option value="virement">Virement</option>
+          <option value="cheque">Chèque</option>
+        </select>
+        <select value={participationModeFilter} onChange={e => setParticipationModeFilter(e.target.value)}
+          className="text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="all">Tous les modes participation</option>
+          <option value="presentiel">Présentiel</option>
+          <option value="en_ligne">En ligne</option>
+          <option value="hybride">Hybride</option>
+        </select>
       </div>
 
       {/* Table */}

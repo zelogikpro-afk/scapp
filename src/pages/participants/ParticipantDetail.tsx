@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
-import { Phone, Mail, MapPin, Briefcase, Calendar, CreditCard, BookOpen, ClipboardList, Activity, Edit2, Save, X, Upload, FileText, Trash2 } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Phone, Mail, MapPin, Briefcase, Calendar, CreditCard, BookOpen, ClipboardList, Activity, Edit2, Save, X, Upload, FileText, Trash2, Download, RefreshCw } from 'lucide-react'
 import { Modal } from '../../components/ui/Modal'
 import { Badge } from '../../components/ui/Badge'
 import { Avatar } from '../../components/ui/Avatar'
@@ -11,6 +11,32 @@ import { useAppStore } from '../../store/appStore'
 import { formatCurrency, formatDate } from '../../lib/utils'
 import { supabase } from '../../lib/supabase'
 import type { Participant } from '../../types'
+import { COHORTS } from '../../lib/mockData'
+import { PROFILE_NAMES, PROFILE_DESCRIPTIONS, PROFILE_PDF, type ProfileKey } from '../../data/testMappingQuestions'
+import { getIELevel, getLevelLabel, getLevelColor, getDimInfo, SECTION_ORDER } from '../../data/testIEQuestions'
+
+const SUPABASE_URL = 'https://twcqvpgpzayjxiwzzesb.supabase.co'
+
+const PROFILE_COLOR: Record<ProfileKey, string> = {
+  sentinelle: 'bg-amber-50 text-amber-700 border-amber-200',
+  gardien: 'bg-green-50 text-green-700 border-green-200',
+  alchimiste: 'bg-red-50 text-red-700 border-red-200',
+  navigateur: 'bg-blue-50 text-blue-700 border-blue-200',
+  explorateur: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  architecte: 'bg-violet-50 text-violet-700 border-violet-200',
+  marcheur: 'bg-slate-50 text-slate-700 border-slate-200',
+}
+
+interface TestResult {
+  id: string
+  test_type: 'ie' | 'mapping'
+  created_at: string
+  first_name: string
+  last_name: string
+  scores: Record<string, number> | null
+  dominant_profile: ProfileKey | null
+  profile_name: string | null
+}
 
 const TYPE_CONFIG = {
   coaching: { label: 'Coaching', color: 'info' as const },
@@ -38,12 +64,19 @@ interface DocFile { name: string; url: string; size: number; created_at: string 
 
 export default function ParticipantDetail({ participant: p, onClose }: { participant: Participant; onClose: () => void }) {
   const [tab, setTab] = useState<'profile' | 'edit' | 'coaching' | 'payments' | 'tests' | 'documents' | 'journey'>('profile')
-  const { coachingPacks, coachingSessions, payments, tests, updateParticipant, deleteParticipant } = useAppStore()
+  const { coachingPacks, coachingSessions, payments, tests, updateParticipant, deleteParticipant, updateCoachingPack } = useAppStore()
   const fileRef = useRef<HTMLInputElement>(null)
   const [docs, setDocs] = useState<DocFile[]>([])
   const [docsLoaded, setDocsLoaded] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [editingPackSessions, setEditingPackSessions] = useState<string | null>(null)
+  const [packSessionInput, setPackSessionInput] = useState('')
+  const [testResults, setTestResults] = useState<TestResult[]>([])
+  const [testsLoaded, setTestsLoaded] = useState(false)
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null)
+
+  useEffect(() => { loadTestResults() }, [])
 
   const pPacks = coachingPacks.filter(cp => cp.participantId === p.id)
   const pSessions = coachingSessions.filter(s => s.participantId === p.id).sort((a, b) => b.sessionNumber - a.sessionNumber)
@@ -61,6 +94,7 @@ export default function ParticipantDetail({ participant: p, onClose }: { partici
     address: p.address ?? '', profession: p.profession ?? '',
     company: p.company ?? '', emergencyContact: p.emergencyContact ?? '',
     type: p.type, notes: p.notes, isActive: p.isActive,
+    promotionId: p.promotionId ?? '', reference: p.reference ?? '',
   })
 
   async function handleSave() {
@@ -68,6 +102,50 @@ export default function ParticipantDetail({ participant: p, onClose }: { partici
     await updateParticipant(p.id, { ...form })
     setSaving(false)
     setTab('profile')
+  }
+
+  async function loadTestResults() {
+    const fn = p.firstName.trim()
+    const ln = p.lastName.trim()
+    const [res1, res2] = await Promise.all([
+      supabase.from('test_results')
+        .select('id, test_type, created_at, first_name, last_name, scores, dominant_profile, profile_name')
+        .ilike('first_name', fn).ilike('last_name', ln)
+        .order('created_at', { ascending: false }),
+      supabase.from('test_results')
+        .select('id, test_type, created_at, first_name, last_name, scores, dominant_profile, profile_name')
+        .ilike('first_name', ln).ilike('last_name', fn)
+        .order('created_at', { ascending: false }),
+    ])
+    const seen = new Set<string>()
+    const merged = [...(res1.data || []), ...(res2.data || [])].filter(r => {
+      if (seen.has(r.id)) return false
+      seen.add(r.id)
+      return true
+    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    setTestResults(merged as TestResult[])
+    setTestsLoaded(true)
+  }
+
+  async function downloadMappingPDF(result: TestResult) {
+    const profile = result.dominant_profile
+    if (!profile) return
+    const filename = PROFILE_PDF[profile]
+    if (!filename) return
+    setDownloadingPdf(result.id)
+    try {
+      const url = `${SUPABASE_URL}/storage/v1/object/public/test-profiles/${filename}`
+      const res = await fetch(url)
+      const blob = await res.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `${result.first_name} ${result.last_name} - ${PROFILE_NAMES[profile]}.pdf`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch (err) {
+      console.error(err)
+    }
+    setDownloadingPdf(null)
   }
 
   async function loadDocs() {
@@ -112,7 +190,7 @@ export default function ParticipantDetail({ participant: p, onClose }: { partici
     { id: 'edit', label: 'Modifier' },
     { id: 'coaching', label: `Coaching (${pPacks.length})` },
     { id: 'payments', label: `Paiements (${pPayments.length})` },
-    { id: 'tests', label: `Tests (${pTests.length})` },
+    { id: 'tests', label: `Tests (${testResults.length})` },
     { id: 'documents', label: 'Documents' },
     { id: 'journey', label: 'Parcours' },
   ] as const
@@ -124,7 +202,10 @@ export default function ParticipantDetail({ participant: p, onClose }: { partici
         <div className="flex items-start gap-4">
           <Avatar name={`${p.firstName} ${p.lastName}`} size="xl" />
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{p.firstName} {p.lastName}</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{p.firstName} {p.lastName}</h2>
+              {p.reference && <span className="text-xs font-mono bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md">{p.reference}</span>}
+            </div>
             <div className="flex flex-wrap items-center gap-2 mt-1.5">
               <Badge variant={TYPE_CONFIG[p.type].color}>{TYPE_CONFIG[p.type].label}</Badge>
               <Badge variant={p.isActive ? 'success' : 'danger'}>{p.isActive ? 'Actif' : 'Inactif'}</Badge>
@@ -166,7 +247,7 @@ export default function ParticipantDetail({ participant: p, onClose }: { partici
         <div className="border-b border-gray-100 dark:border-gray-800">
           <div className="flex gap-0.5 overflow-x-auto scrollbar-hide">
             {tabs.map(t => (
-              <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'documents' && !docsLoaded) loadDocs() }}
+              <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'documents' && !docsLoaded) loadDocs(); if (t.id === 'tests' && !testsLoaded) loadTestResults() }}
                 className={`px-3 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors -mb-px ${tab === t.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
               >
                 {t.label}
@@ -267,6 +348,18 @@ export default function ParticipantDetail({ participant: p, onClose }: { partici
                 <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Contact d'urgence</label>
                 <Input value={form.emergencyContact} onChange={e => setForm(f => ({ ...f, emergencyContact: e.target.value }))} placeholder="Nom et téléphone" />
               </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Référence</label>
+                <Input value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} placeholder="SC-2025-001" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Promotion</label>
+                <select value={form.promotionId} onChange={e => setForm(f => ({ ...f, promotionId: e.target.value }))}
+                  className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Aucune promotion</option>
+                  {COHORTS.map(c => <option key={c.id} value={c.id}>{c.programName} ({(c as any).startDate?.slice(0,7)})</option>)}
+                </select>
+              </div>
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Notes internes</label>
                 <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3}
@@ -302,12 +395,53 @@ export default function ParticipantDetail({ participant: p, onClose }: { partici
                   </Badge>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
-                  <div><p className="text-xs text-gray-400">Séances</p><p className="font-semibold">{pack.usedSessions}/{pack.totalSessions}</p></div>
+                  <div>
+                    <p className="text-xs text-gray-400">Séances réalisées</p>
+                    {editingPackSessions === pack.id ? (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <input
+                          type="number" min={0} max={pack.totalSessions}
+                          value={packSessionInput}
+                          onChange={e => setPackSessionInput(e.target.value)}
+                          onKeyDown={async e => {
+                            if (e.key === 'Enter') {
+                              const val = Math.min(pack.totalSessions, Math.max(0, parseInt(packSessionInput) || 0))
+                              await updateCoachingPack(pack.id, { usedSessions: val })
+                              setEditingPackSessions(null)
+                            } else if (e.key === 'Escape') {
+                              setEditingPackSessions(null)
+                            }
+                          }}
+                          autoFocus
+                          className="w-14 text-sm font-semibold border border-blue-400 rounded px-1.5 py-0.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none"
+                        />
+                        <span className="text-xs text-gray-400">/ {pack.totalSessions}</span>
+                        <button onClick={async () => {
+                          const val = Math.min(pack.totalSessions, Math.max(0, parseInt(packSessionInput) || 0))
+                          await updateCoachingPack(pack.id, { usedSessions: val })
+                          setEditingPackSessions(null)
+                        }} className="text-xs text-blue-600 font-medium hover:underline">✓</button>
+                        <button onClick={() => setEditingPackSessions(null)} className="text-xs text-gray-400 hover:underline">✕</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => { setEditingPackSessions(pack.id); setPackSessionInput(String(pack.usedSessions)) }}
+                        className="font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 group"
+                        title="Cliquer pour modifier"
+                      >
+                        {pack.usedSessions}/{pack.totalSessions}
+                        <span className="text-xs text-gray-300 dark:text-gray-600 group-hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">✎</span>
+                      </button>
+                    )}
+                  </div>
                   <div><p className="text-xs text-gray-400">Prix</p><p className="font-semibold">{formatCurrency(pack.price)}</p></div>
                   <div><p className="text-xs text-gray-400">Payé</p><p className="font-semibold text-emerald-600">{formatCurrency(pack.amountPaid)}</p></div>
                   <div><p className="text-xs text-gray-400">Restant</p><p className={`font-semibold ${pack.price - pack.discount - pack.amountPaid > 0 ? 'text-amber-600' : 'text-gray-400'}`}>{formatCurrency(Math.max(0, pack.price - pack.discount - pack.amountPaid))}</p></div>
                 </div>
                 <Progress value={pack.usedSessions} max={pack.totalSessions} showLabel color="blue" />
+                {pack.weeklySlot && (
+                  <p className="text-xs text-gray-400 mt-1.5">🗓 {pack.weeklySlot} · 50 min</p>
+                )}
                 {pSessions.filter(s => s.packId === pack.id).length > 0 && (
                   <div className="mt-4 space-y-2">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Séances</p>
@@ -361,21 +495,110 @@ export default function ParticipantDetail({ participant: p, onClose }: { partici
         {/* Tests Tab */}
         {tab === 'tests' && (
           <div className="space-y-3">
-            {pTests.length === 0 && <p className="text-sm text-gray-400 text-center py-6">Aucun test réalisé</p>}
-            {pTests.map(test => (
-              <Card key={test.id}>
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="font-semibold text-gray-900 dark:text-gray-100">{test.type}</p>
-                    <p className="text-xs text-gray-400">{formatDate(test.date)}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">
+                {`Tests liés à ${p.firstName} ${p.lastName}`}
+              </p>
+              <button onClick={() => { setTestsLoaded(false); setTestResults([]); loadTestResults() }}
+                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 transition-colors">
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {!testsLoaded && <p className="text-sm text-gray-400 text-center py-6">Chargement…</p>}
+
+            {testsLoaded && testResults.length === 0 && (
+              <p className="text-sm text-gray-400 text-center py-6">Aucun test réalisé</p>
+            )}
+
+            {testsLoaded && testResults.map(r => {
+              if (r.test_type === 'ie') {
+                const totalScore = r.scores ? Object.values(r.scores).reduce((a, b) => a + b, 0) : 0
+                return (
+                  <Card key={r.id}>
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">Test Intelligence Émotionnelle</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {new Date(r.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{totalScore}/80</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200 font-medium">IE</span>
+                      </div>
+                    </div>
+                    {r.scores && (
+                      <div className="space-y-2">
+                        {SECTION_ORDER.map(dim => {
+                          const dimInfo = getDimInfo(dim)
+                          const score = r.scores![dim] ?? 0
+                          const level = getIELevel(score)
+                          const color = getLevelColor(level)
+                          return (
+                            <div key={dim}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                                  <span>{dimInfo.icon}</span> {dimInfo.label}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs px-1.5 py-0.5 rounded-full border font-medium"
+                                    style={{ backgroundColor: color + '20', color, borderColor: color + '50' }}>
+                                    {getLevelLabel(level)}
+                                  </span>
+                                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{score}/16</span>
+                                </div>
+                              </div>
+                              <div className="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full">
+                                <div className="h-full rounded-full transition-all" style={{ width: `${(score / 16) * 100}%`, backgroundColor: color }} />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </Card>
+                )
+              }
+
+              // Mapping
+              const profile = r.dominant_profile
+              const colorClass = profile ? (PROFILE_COLOR[profile] || 'bg-gray-50 text-gray-700 border-gray-200') : 'bg-gray-50 text-gray-700 border-gray-200'
+              const hasPdf = profile && !!PROFILE_PDF[profile]
+              return (
+                <Card key={r.id}>
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">Test Mapping des Profils</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {new Date(r.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                      </p>
+                    </div>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200 font-medium">Mapping</span>
                   </div>
-                  <Badge variant="purple">{test.type}</Badge>
-                </div>
-                {test.result && <p className="text-sm text-gray-700 dark:text-gray-300"><span className="font-medium">Résultat:</span> {test.result}</p>}
-                {test.score && <p className="text-xs text-gray-500 mt-1"><span className="font-medium">Score:</span> {test.score}</p>}
-                {test.interpretation && <p className="text-xs text-gray-500 mt-1"><span className="font-medium">Interprétation:</span> {test.interpretation}</p>}
-              </Card>
-            ))}
+                  {profile && (
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${colorClass}`}>
+                          {PROFILE_NAMES[profile]}
+                        </span>
+                        <p className="text-xs text-gray-500 mt-2 leading-relaxed">{PROFILE_DESCRIPTIONS[profile]}</p>
+                      </div>
+                      {hasPdf && (
+                        <button
+                          onClick={() => downloadMappingPDF(r)}
+                          disabled={downloadingPdf === r.id}
+                          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 font-medium transition-colors disabled:opacity-50 flex-shrink-0"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          {downloadingPdf === r.id ? 'Téléchargement…' : 'Rapport PDF'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </Card>
+              )
+            })}
           </div>
         )}
 
@@ -425,7 +648,51 @@ export default function ParticipantDetail({ participant: p, onClose }: { partici
 
         {/* Journey Tab */}
         {tab === 'journey' && (
-          <div className="relative">
+          <div className="space-y-6">
+            {/* Formation parcours */}
+            {p.reference && (() => {
+              const cohortIds = p.reference.split(',').map((s: string) => s.trim()).filter(Boolean)
+              const participantCohorts = cohortIds
+                .map(id => COHORTS.find(c => c.id === id))
+                .filter(Boolean)
+                .sort((a: any, b: any) => a.startDate.localeCompare(b.startDate))
+              if (participantCohorts.length === 0) return null
+              return (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Parcours Formation</h4>
+                  <div className="space-y-2">
+                    {participantCohorts.map((cohort: any, i: number) => {
+                      const levelLabel = cohort.programId === 'tp1' ? 'Niveau 1 — Coach de vie' : cohort.programId === 'tp2' ? 'Niveau 2 — Master Coach Thérapeute' : 'Niveau 3 — Master Coach Consultant'
+                      const levelColor = cohort.programId === 'tp1' ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300' : cohort.programId === 'tp2' ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300' : 'bg-amber-100 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300'
+                      const statusLabel = cohort.status === 'completed' ? 'Terminée' : cohort.status === 'active' ? 'En cours' : 'À venir'
+                      const pay = pPayments.find((pay: any) => {
+                        const notes = (pay.notes || '').toLowerCase()
+                        return cohort.programId === 'tp1' ? notes.includes('niveau 1') : cohort.programId === 'tp2' ? notes.includes('niveau 2') : notes.includes('niveau 3')
+                      })
+                      return (
+                        <div key={cohort.id} className={`flex items-center gap-3 p-3 rounded-lg border ${levelColor}`}>
+                          <div className="w-6 h-6 rounded-full bg-white dark:bg-gray-900 border-2 border-current flex items-center justify-center text-xs font-bold flex-shrink-0">{i + 1}</div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold">{levelLabel}</p>
+                            <p className="text-xs opacity-75">{formatDate(cohort.startDate)} → {cohort.endDate ? formatDate(cohort.endDate) : '…'} · {statusLabel}</p>
+                          </div>
+                          {pay && (
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-xs font-semibold">{formatCurrency(pay.amountPaid)}</p>
+                              {pay.remainingAmount > 0 && <p className="text-xs opacity-60">Reste: {formatCurrency(pay.remainingAmount)}</p>}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
+            {/* Timeline */}
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Historique</h4>
+              <div className="relative">
             <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-gray-100 dark:bg-gray-800" />
             <div className="space-y-4">
               {[
@@ -447,6 +714,8 @@ export default function ParticipantDetail({ participant: p, onClose }: { partici
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
             </div>
           </div>
         )}

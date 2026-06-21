@@ -3,20 +3,25 @@ import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { useAppStore } from '../../store/appStore'
+import { COHORTS, TRAINING_PROGRAMS } from '../../lib/mockData'
 
 export default function AddParticipantModal({ onClose }: { onClose: () => void }) {
-  const { addParticipant } = useAppStore()
+  const { addParticipant, participants } = useAppStore()
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', phone: '', whatsapp: '',
     gender: 'female' as const, birthDate: '', cin: '', address: '',
     profession: '', company: '', emergencyContact: '',
     type: 'coaching' as 'coaching' | 'training' | 'both',
     notes: '', tags: [] as string[],
+    promotionId: '', reference: '',
   })
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    addParticipant({ ...form, isActive: true })
+    const year = new Date().getFullYear()
+    const nextNum = (participants.length + 1).toString().padStart(3, '0')
+    const ref = form.reference || `SC-${year}-${nextNum}`
+    addParticipant({ ...form, isActive: true, reference: ref, promotionId: form.promotionId || undefined })
     onClose()
   }
 
@@ -68,6 +73,19 @@ export default function AddParticipantModal({ onClose }: { onClose: () => void }
             <option value="training">Formation uniquement</option>
             <option value="both">Coaching & Formation</option>
           </select>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Référence (auto si vide)" value={form.reference} onChange={f('reference')} placeholder="ex: SC-2025-001" />
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Promotion</label>
+            <select value={form.promotionId} onChange={f('promotionId')} className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">Aucune promotion</option>
+              {COHORTS.map(c => {
+                const prog = TRAINING_PROGRAMS.find(p => p.id === (c as any).programId)
+                return <option key={c.id} value={c.id}>{c.programName} ({(c as any).startDate?.slice(0,7)})</option>
+              })}
+            </select>
+          </div>
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Notes internes</label>

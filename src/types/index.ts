@@ -38,6 +38,26 @@ export interface Lead {
   createdAt: string
   updatedAt: string
   tags?: string[]
+  // Affectation & suivi
+  assignedToName?: string      // nom de la personne assignée
+  lastTouchedBy?: string       // nom de la dernière personne à avoir modifié
+  lastTouchedAt?: string       // date de la dernière modification
+  // Meta Ads fields
+  metaLeadId?: string          // id depuis l'export Meta (l:XXXXXXXXX)
+  horairePreference?: string   // disponibilité (quand disponible)
+  delaiAction?: string         // sous combien de temps passer à l'action
+  // Inscription form fields
+  genre?: string
+  dateNaissance?: string
+  adresse?: string
+  cin?: string
+  modaliteParticipation?: string
+  modalitePaiement?: string
+  montantVerse?: number
+  prixFormation?: number
+  dateVersement2?: string
+  dateVersement3?: string
+  inscriptionId?: string
 }
 
 export interface LeadNote {
@@ -83,6 +103,8 @@ export interface Participant {
   createdAt: string
   updatedAt: string
   isActive: boolean
+  reference?: string
+  promotionId?: string
 }
 
 // ─── Coaching ──────────────────────────────────────────────────────────────────
@@ -90,6 +112,7 @@ export interface CoachingPack {
   id: string
   participantId: string
   name: string
+  weeklySlot?: string
   totalSessions: number
   usedSessions: number
   price: number
@@ -135,6 +158,13 @@ export interface TrainingProgram {
   color?: string
 }
 
+export interface CohortSession {
+  date: string
+  startTime: string
+  endTime: string
+  status: 'completed' | 'scheduled' | 'cancelled'
+}
+
 export interface Cohort {
   id: string
   programId: string
@@ -147,6 +177,7 @@ export interface Cohort {
   capacity: number
   enrollmentCount: number
   status: 'upcoming' | 'active' | 'completed' | 'cancelled'
+  sessions?: CohortSession[]
 }
 
 export interface TrainingEnrollment {
@@ -173,6 +204,7 @@ export interface Payment {
   participantName: string
   programType: 'coaching' | 'training'
   programName: string
+  session?: string
   totalAmount: number
   amountPaid: number
   remainingAmount: number

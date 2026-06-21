@@ -39,6 +39,14 @@ const TESTS = [
     path: '/test/compass',
     gradient: 'from-indigo-500 to-purple-700',
   },
+  {
+    type: 'quiz_coach',
+    label: 'Quiz Final',
+    subtitle: 'Évaluez vos acquis — 40 questions sur 6 thèmes',
+    icon: '📝',
+    path: '/test/quiz-coach',
+    gradient: 'from-amber-500 to-orange-600',
+  },
 ]
 
 export default function EspaceTests() {

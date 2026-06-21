@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, ShoppingCart, CheckCircle, Clock, Package, FileText, XCircle, Pause, Trash2, Edit2, X, Save } from 'lucide-react'
+import { Plus, Search, ShoppingCart, CheckCircle, Clock, Package, FileText, XCircle, Trash2, Edit2, Save } from 'lucide-react'
+import DateRangeFilter, { type Preset, type DateRange, getRange, inRange } from '../../components/ui/DateRangeFilter'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -237,7 +238,14 @@ export default function Purchases() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [requesterFilter, setRequesterFilter] = useState<string>('all')
+  const [urgencyFilter, setUrgencyFilter] = useState<string>('all')
+  const [invoiceFilter, setInvoiceFilter] = useState<string>('all')
+  const [preset, setPreset] = useState<Preset>('all')
+  const [range, setRange] = useState<DateRange>(getRange('all'))
   const [showAdd, setShowAdd] = useState(false)
+
+  const handleDateChange = (p: Preset, r: DateRange) => { setPreset(p); setRange(r) }
   const [editing, setEditing] = useState<Purchase | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
 
@@ -251,11 +259,18 @@ export default function Purchases() {
   useEffect(() => { fetchPurchases() }, [])
 
   const filtered = useMemo(() => purchases.filter(p => {
-    const matchSearch = !search || `${p.description} ${p.requester} ${p.supplier} ${p.category} ${p.reference}`.toLowerCase().includes(search.toLowerCase())
-    const matchStatus = statusFilter === 'all' || p.status === statusFilter
-    const matchCat = categoryFilter === 'all' || p.category === categoryFilter
-    return matchSearch && matchStatus && matchCat
-  }), [purchases, search, statusFilter, categoryFilter])
+    const matchSearch    = !search || `${p.description} ${p.requester} ${p.supplier} ${p.category} ${p.reference}`.toLowerCase().includes(search.toLowerCase())
+    const matchStatus    = statusFilter === 'all' || p.status === statusFilter
+    const matchCat       = categoryFilter === 'all' || p.category === categoryFilter
+    const matchRequester = requesterFilter === 'all' || p.requester === requesterFilter
+    const matchUrgency   = urgencyFilter === 'all' || p.urgency === urgencyFilter
+    const matchInvoice   = invoiceFilter === 'all'
+      || (invoiceFilter === 'received' && p.invoice_received)
+      || (invoiceFilter === 'pending' && p.invoice_possible && !p.invoice_received)
+      || (invoiceFilter === 'na' && !p.invoice_possible)
+    const matchDate      = inRange(p.request_date, range)
+    return matchSearch && matchStatus && matchCat && matchRequester && matchUrgency && matchInvoice && matchDate
+  }), [purchases, search, statusFilter, categoryFilter, requesterFilter, urgencyFilter, invoiceFilter, range])
 
   const stats = useMemo(() => {
     const demanded = purchases.filter(p => p.status === 'requested').length
@@ -351,10 +366,11 @@ export default function Purchases() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 flex-wrap">
+      <div className="flex gap-3 flex-wrap items-center">
         <div className="flex-1 min-w-48">
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher…" icon={<Search className="w-4 h-4" />} />
         </div>
+        <DateRangeFilter value={preset} onChange={handleDateChange} />
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300">
           <option value="all">Tous les statuts</option>
           {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
@@ -362,6 +378,20 @@ export default function Purchases() {
         <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300">
           <option value="all">Toutes catégories</option>
           {categories.map(c => <option key={c}>{c}</option>)}
+        </select>
+        <select value={requesterFilter} onChange={e => setRequesterFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+          <option value="all">Tous les demandeurs</option>
+          {TEAM.map(t => <option key={t}>{t}</option>)}
+        </select>
+        <select value={urgencyFilter} onChange={e => setUrgencyFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+          <option value="all">Toutes urgences</option>
+          {Object.entries(URGENCY_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
+        <select value={invoiceFilter} onChange={e => setInvoiceFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+          <option value="all">Toutes factures</option>
+          <option value="received">Facture reçue</option>
+          <option value="pending">Facture en attente</option>
+          <option value="na">Sans facture</option>
         </select>
       </div>
 
@@ -379,14 +409,14 @@ export default function Purchases() {
               <Th>Fournisseur</Th>
               <Th>Montant</Th>
               <Th>Facture</Th>
-              <Th></Th>
+              <Th><span /></Th>
             </tr>
           </Thead>
           <Tbody>
             {loading ? (
-              <Tr><Td className="text-center text-gray-400 py-12" colSpan={10 as any}>Chargement…</Td></Tr>
+              <Tr><Td className="text-center text-gray-400 py-12" colSpan={10 as any}><span>Chargement…</span></Td></Tr>
             ) : filtered.length === 0 ? (
-              <Tr><Td className="text-center text-gray-400 py-12" colSpan={10 as any}>Aucun achat trouvé</Td></Tr>
+              <Tr><Td className="text-center text-gray-400 py-12" colSpan={10 as any}><span>Aucun achat trouvé</span></Td></Tr>
             ) : filtered.map(p => {
               const sc = STATUS_CONFIG[p.status]
               const uc = URGENCY_CONFIG[p.urgency]
@@ -450,14 +480,13 @@ export default function Purchases() {
 
       {/* Add Modal */}
       {showAdd && (
-        <Modal title="Nouvelle demande d'achat" onClose={() => setShowAdd(false)} size="lg">
+        <Modal open={showAdd} title="Nouvelle demande d'achat" onClose={() => setShowAdd(false)} size="lg">
           <PurchaseForm initial={{}} onSave={handleSave} onClose={() => setShowAdd(false)} />
         </Modal>
       )}
 
-      {/* Edit Modal */}
       {editing && (
-        <Modal title={`Modifier — ${editing.reference || editing.description}`} onClose={() => setEditing(null)} size="lg">
+        <Modal open={!!editing} title={`Modifier — ${editing.reference || editing.description}`} onClose={() => setEditing(null)} size="lg">
           <PurchaseForm initial={editing} onSave={handleSave} onClose={() => setEditing(null)} />
         </Modal>
       )}

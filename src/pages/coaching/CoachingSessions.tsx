@@ -1,11 +1,12 @@
-import { useState } from 'react'
-import { Plus, Video, Clock, CheckCircle, XCircle, Trash2, Pencil } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Plus, Video, Clock, CheckCircle, XCircle, Trash2, Pencil, Search } from 'lucide-react'
+import DateRangeFilter, { type Preset, type DateRange, getRange, inRange } from '../../components/ui/DateRangeFilter'
+import { Input } from '../../components/ui/Input'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Avatar } from '../../components/ui/Avatar'
 import { Modal } from '../../components/ui/Modal'
-import { Input } from '../../components/ui/Input'
 import { useAppStore } from '../../store/appStore'
 import { useAuthStore } from '../../store/authStore'
 import { formatDate } from '../../lib/utils'
@@ -29,13 +30,30 @@ export default function CoachingSessions() {
   const { coachingSessions, participants, coachingPacks, addCoachingSession, updateCoachingSession, deleteCoachingSession } = useAppStore()
   const { user } = useAuthStore()
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [participantFilter, setParticipantFilter] = useState<string>('all')
+  const [packFilter, setPackFilter] = useState<string>('all')
+  const [search, setSearch] = useState('')
+  const [preset, setPreset] = useState<Preset>('all')
+  const [range, setRange] = useState<DateRange>(getRange('all'))
   const [showModal, setShowModal] = useState(false)
+
+  const handleDateChange = (p: Preset, r: DateRange) => { setPreset(p); setRange(r) }
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState({ ...EMPTY })
   const [loading, setLoading] = useState(false)
 
   const setF = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }))
-  const filtered = coachingSessions.filter(s => statusFilter === 'all' || s.status === statusFilter)
+  const filtered = useMemo(() => coachingSessions.filter(s => {
+    const matchStatus      = statusFilter === 'all' || s.status === statusFilter
+    const matchDate        = inRange(s.date, range)
+    const matchParticipant = participantFilter === 'all' || s.participantId === participantFilter
+    const matchPack        = packFilter === 'all' || s.packId === packFilter
+    const matchSearch      = !search || (() => {
+      const p = participants.find(x => x.id === s.participantId)
+      return p ? `${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase()) : false
+    })()
+    return matchStatus && matchDate && matchParticipant && matchPack && matchSearch
+  }), [coachingSessions, statusFilter, range, participantFilter, packFilter, search, participants])
   const sorted = [...filtered].sort((a, b) => (b.date || '').localeCompare(a.date || ''))
   const selectedPack = coachingPacks.find(p => p.id === form.packId)
 
@@ -77,6 +95,23 @@ export default function CoachingSessions() {
           <p className="text-sm text-gray-500">{coachingSessions.length} séances au total</p>
         </div>
         <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => { setEditId(null); setForm({ ...EMPTY }); setShowModal(true) }}>Nouvelle séance</Button>
+      </div>
+
+      <div className="flex gap-3 flex-wrap items-center">
+        <div className="flex-1 min-w-48">
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un participant…" icon={<Search className="w-4 h-4" />} />
+        </div>
+        <DateRangeFilter value={preset} onChange={handleDateChange} />
+        <select value={participantFilter} onChange={e => setParticipantFilter(e.target.value)}
+          className="text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="all">Tous les participants</option>
+          {participants.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>)}
+        </select>
+        <select value={packFilter} onChange={e => setPackFilter(e.target.value)}
+          className="text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="all">Tous les packs</option>
+          {coachingPacks.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
       </div>
 
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">

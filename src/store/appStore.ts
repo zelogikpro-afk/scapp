@@ -1,10 +1,11 @@
 import { create } from 'zustand'
 import type { Lead, Participant, Payment, Appointment, Task, Notification, CoachingPack, CoachingSession, PsychometricTest } from '../types'
-import { supabase } from '../lib/supabase'
+import { supabase, supabaseAdmin } from '../lib/supabase'
 import { generateId } from '../lib/utils'
 
 interface AppState {
   leads: Lead[]
+  profiles: { id: string; name: string; role: string }[]
   participants: Participant[]
   payments: Payment[]
   appointments: Appointment[]
@@ -15,20 +16,22 @@ interface AppState {
   tests: PsychometricTest[]
   searchQuery: string
   loading: boolean
+  userRole: string | null
 
   setSearchQuery: (q: string) => void
   unreadCount: () => number
 
   // Fetch
+  fetchProfiles: () => Promise<void>
   fetchLeads: () => Promise<void>
   fetchParticipants: () => Promise<void>
   fetchPayments: () => Promise<void>
-  fetchAppointments: () => Promise<void>
+  fetchAppointments: (role?: string) => Promise<void>
   fetchTasks: () => Promise<void>
   fetchNotifications: (userId: string) => Promise<void>
   fetchCoachingPacks: () => Promise<void>
   fetchCoachingSessions: () => Promise<void>
-  fetchAll: (userId: string) => Promise<void>
+  fetchAll: (userId: string, role?: string) => Promise<void>
 
   // Leads
   addLead: (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt' | 'notes' | 'followUps'>) => Promise<void>
@@ -66,6 +69,7 @@ interface AppState {
 
   // Appointments
   addAppointment: (a: Omit<Appointment, 'id'>) => Promise<void>
+  updateAppointment: (id: string, updates: Partial<Appointment>) => Promise<void>
   deleteAppointment: (id: string) => Promise<void>
 
   // Tests
@@ -94,6 +98,19 @@ function mapLead(row: any): Lead {
       date: f.date, authorId: f.author_id, authorName: f.author_name,
     })),
     createdAt: row.created_at, updatedAt: row.updated_at,
+    assignedToName: row.assigned_to_name,
+    lastTouchedBy: row.last_touched_by,
+    lastTouchedAt: row.last_touched_at,
+    horairePreference: row.horaire_preference,
+    delaiAction: row.delai_action,
+    metaLeadId: row.meta_lead_id,
+    genre: row.genre, dateNaissance: row.date_naissance,
+    adresse: row.adresse, cin: row.cin,
+    modaliteParticipation: row.modalite_participation,
+    modalitePaiement: row.modalite_paiement,
+    montantVerse: row.montant_verse, prixFormation: row.prix_formation,
+    dateVersement2: row.date_versement_2, dateVersement3: row.date_versement_3,
+    inscriptionId: row.inscription_id,
   }
 }
 
@@ -106,6 +123,7 @@ function mapParticipant(row: any): Participant {
     emergencyContact: row.emergency_contact, type: row.type,
     avatar: row.avatar_url, notes: row.notes || '', tags: row.tags || [],
     isActive: row.is_active, createdAt: row.created_at, updatedAt: row.updated_at,
+    reference: row.reference, promotionId: row.promotion_id,
   }
 }
 
@@ -113,6 +131,7 @@ function mapPayment(row: any): Payment {
   return {
     id: row.id, participantId: row.participant_id, participantName: row.participant_name,
     programType: row.program_type, programName: row.program_name,
+    session: row.notes || undefined,
     totalAmount: row.total_amount, amountPaid: row.amount_paid,
     remainingAmount: row.remaining_amount, status: row.status, method: row.method,
     reference: row.reference, date: row.date, dueDate: row.due_date, notes: row.notes,
@@ -147,8 +166,9 @@ function mapTask(row: any): Task {
 }
 
 function mapCoachingPack(row: any): CoachingPack {
+  const [name, weeklySlot] = (row.name as string).split('\n')
   return {
-    id: row.id, participantId: row.participant_id, name: row.name,
+    id: row.id, participantId: row.participant_id, name, weeklySlot,
     totalSessions: row.total_sessions, usedSessions: row.used_sessions,
     price: row.price, discount: row.discount, amountPaid: row.amount_paid,
     purchaseDate: row.purchase_date, expirationDate: row.expiration_date,
@@ -168,12 +188,17 @@ function mapSession(row: any): CoachingSession {
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
-  leads: [], participants: [], payments: [], appointments: [],
+  leads: [], profiles: [], participants: [], payments: [], appointments: [],
   tasks: [], notifications: [], coachingPacks: [], coachingSessions: [],
-  tests: [], searchQuery: '', loading: false,
+  tests: [], searchQuery: '', loading: false, userRole: null,
 
   setSearchQuery: (q) => set({ searchQuery: q }),
   unreadCount: () => get().notifications.filter(n => !n.isRead).length,
+
+  fetchProfiles: async () => {
+    const { data } = await supabase.from('profiles').select('id, name, role').eq('is_active', true)
+    if (data) set({ profiles: data })
+  },
 
   fetchLeads: async () => {
     const { data } = await supabase
@@ -200,8 +225,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (data) set({ payments: data.map(mapPayment) })
   },
 
-  fetchAppointments: async () => {
-    const { data } = await supabase
+  fetchAppointments: async (_role?: string) => {
+    const { data } = await supabaseAdmin
       .from('appointments')
       .select('*')
       .order('date', { ascending: true })
@@ -233,22 +258,38 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   fetchCoachingPacks: async () => {
-    const { data } = await supabase.from('coaching_packs').select('*').order('created_at', { ascending: false })
-    if (data) set({ coachingPacks: data.map(mapCoachingPack) })
+    const [{ data }, { data: ovData }] = await Promise.all([
+      supabaseAdmin.from('coaching_packs').select('*').order('created_at', { ascending: false }),
+      supabaseAdmin.from('app_settings').select('value').eq('key', 'pack_overrides').single(),
+    ])
+    const overrides: Record<string, any> = ovData?.value ? JSON.parse(ovData.value) : {}
+    if (data) set({ coachingPacks: data.map(row => {
+      const pack = mapCoachingPack(row)
+      const ov = overrides[pack.id]
+      if (!ov) return pack
+      const merged = { ...pack, ...ov }
+      if (ov.name) {
+        const [name, weeklySlot] = (ov.name as string).split('\n')
+        merged.name = name
+        merged.weeklySlot = weeklySlot
+      }
+      return merged
+    }) })
   },
 
   fetchCoachingSessions: async () => {
-    const { data } = await supabase.from('coaching_sessions').select('*').order('date', { ascending: false })
+    const { data } = await supabaseAdmin.from('coaching_sessions').select('*').order('date', { ascending: false })
     if (data) set({ coachingSessions: data.map(mapSession) })
   },
 
-  fetchAll: async (userId) => {
-    set({ loading: true })
+  fetchAll: async (userId, role?) => {
+    set({ loading: true, userRole: role ?? null })
     await Promise.all([
+      get().fetchProfiles(),
       get().fetchLeads(),
       get().fetchParticipants(),
       get().fetchPayments(),
-      get().fetchAppointments(),
+      get().fetchAppointments(role),
       get().fetchTasks(),
       get().fetchNotifications(userId),
       get().fetchCoachingPacks(),
@@ -263,6 +304,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       phone: data.phone, whatsapp: data.whatsapp, email: data.email,
       facebook_name: data.facebookName, source: data.source,
       campaign: data.campaign, ad_set: data.adSet,
+      city: data.city, profession: data.profession,
+      program_interest: data.programInterest, interest_level: data.interestLevel,
+      next_follow_up_date: data.nextFollowUpDate,
+      horaire_preference: (data as any).horairePreference,
+      delai_action: (data as any).delaiAction,
       status: data.status, assigned_to: data.assignedTo, tags: data.tags,
     }).select('*, lead_notes(*), follow_ups(*)').single()
     if (row) set(s => ({ leads: [mapLead(row), ...s.leads] }))
@@ -276,7 +322,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (updates.phone !== undefined) patch.phone = updates.phone
     if (updates.nextFollowUpDate !== undefined) patch.next_follow_up_date = updates.nextFollowUpDate
     if (updates.assignedTo !== undefined) patch.assigned_to = updates.assignedTo
+    if (updates.assignedToName !== undefined) patch.assigned_to_name = updates.assignedToName
     if (updates.tags !== undefined) patch.tags = updates.tags
+    if (updates.lastTouchedBy !== undefined) {
+      patch.last_touched_by = updates.lastTouchedBy
+      patch.last_touched_at = new Date().toISOString()
+    }
     await supabase.from('leads').update(patch).eq('id', id)
     set(s => ({
       leads: s.leads.map(l => l.id === id ? { ...l, ...updates, updatedAt: new Date().toISOString() } : l)
@@ -289,15 +340,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   addLeadNote: async (leadId, content, authorId, authorName) => {
+    const now = new Date().toISOString()
     const { data } = await supabase.from('lead_notes').insert({
       lead_id: leadId, content, author_id: authorId, author_name: authorName,
     }).select().single()
     if (data) {
+      await supabase.from('leads').update({ last_touched_by: authorName, last_touched_at: now }).eq('id', leadId)
       set(s => ({
         leads: s.leads.map(l => l.id === leadId ? {
           ...l,
           notes: [...l.notes, { id: data.id, content, authorId, authorName, createdAt: data.created_at }],
-          updatedAt: new Date().toISOString(),
+          lastTouchedBy: authorName, lastTouchedAt: now,
+          updatedAt: now,
         } : l)
       }))
     }
@@ -334,6 +388,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (updates.notes !== undefined) patch.notes = updates.notes
     if (updates.tags !== undefined) patch.tags = updates.tags
     if (updates.isActive !== undefined) patch.is_active = updates.isActive
+    if (updates.promotionId !== undefined) patch.promotion_id = updates.promotionId
+    if (updates.reference !== undefined) patch.reference = updates.reference
     await supabase.from('participants').update(patch).eq('id', id)
     set(s => ({
       participants: s.participants.map(p => p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p)
@@ -386,9 +442,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     const patch: any = {}
     if (updates.status !== undefined) patch.status = updates.status
     if (updates.amountPaid !== undefined) patch.amount_paid = updates.amountPaid
+    if (updates.totalAmount !== undefined) patch.total_amount = updates.totalAmount
+    if (updates.programName !== undefined) patch.program_name = updates.programName
+    if (updates.programType !== undefined) patch.program_type = updates.programType
+    if (updates.method !== undefined) patch.method = updates.method
+    if (updates.date !== undefined) patch.date = updates.date
+    if (updates.dueDate !== undefined) patch.due_date = updates.dueDate
+    if (updates.notes !== undefined) patch.notes = updates.notes
+    if (updates.reference !== undefined) patch.reference = updates.reference
+    if (updates.session !== undefined) patch.session = updates.session
+    if (updates.participantName !== undefined) patch.participant_name = updates.participantName
     await supabase.from('payments').update(patch).eq('id', id)
     set(s => ({
-      payments: s.payments.map(p => p.id === id ? { ...p, ...updates } : p)
+      payments: s.payments.map(p => p.id === id ? { ...p, ...updates, remainingAmount: (updates.totalAmount ?? p.totalAmount) - (updates.amountPaid ?? p.amountPaid) } : p)
     }))
   },
 
@@ -433,7 +499,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   addCoachingPack: async (data) => {
     const { data: row } = await supabase.from('coaching_packs').insert({
-      participant_id: data.participantId, name: data.name,
+      participant_id: data.participantId, name: data.weeklySlot ? `${data.name}\n${data.weeklySlot}` : data.name,
       total_sessions: data.totalSessions, used_sessions: data.usedSessions ?? 0,
       price: data.price, discount: data.discount ?? 0, amount_paid: data.amountPaid ?? 0,
       purchase_date: data.purchaseDate, expiration_date: data.expirationDate,
@@ -443,13 +509,31 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   updateCoachingPack: async (id, updates) => {
+    // coaching_packs has a broken UPDATE trigger (references NEW.updated_at which doesn't exist).
+    // Workaround: persist changes in app_settings key "pack_overrides" and merge at read time.
+    const current = get().coachingPacks.find(p => p.id === id)
     const patch: any = {}
-    if (updates.name !== undefined) patch.name = updates.name
-    if (updates.totalSessions !== undefined) patch.total_sessions = updates.totalSessions
-    if (updates.usedSessions !== undefined) patch.used_sessions = updates.usedSessions
+    if (updates.name !== undefined || updates.weeklySlot !== undefined) {
+      const name = updates.name ?? current?.name ?? ''
+      const slot = updates.weeklySlot !== undefined ? updates.weeklySlot : (current?.weeklySlot ?? '')
+      patch.name = slot ? `${name}\n${slot}` : name
+    }
+    if (updates.totalSessions !== undefined) patch.totalSessions = updates.totalSessions
+    if (updates.usedSessions !== undefined) patch.usedSessions = updates.usedSessions
+    if (updates.price !== undefined) patch.price = updates.price
+    if (updates.discount !== undefined) patch.discount = updates.discount
+    if (updates.amountPaid !== undefined) patch.amountPaid = updates.amountPaid
+    if (updates.purchaseDate !== undefined) patch.purchaseDate = updates.purchaseDate
     if (updates.status !== undefined) patch.status = updates.status
-    if (updates.expirationDate !== undefined) patch.expiration_date = updates.expirationDate
-    await supabase.from('coaching_packs').update(patch).eq('id', id)
+    if (updates.expirationDate !== undefined) patch.expirationDate = updates.expirationDate
+
+    const { data: ovData } = await supabaseAdmin.from('app_settings').select('value').eq('key', 'pack_overrides').single()
+    const overrides: Record<string, any> = ovData?.value ? JSON.parse(ovData.value) : {}
+    overrides[id] = { ...overrides[id], ...patch }
+    const { error } = await supabaseAdmin.from('app_settings').upsert({
+      key: 'pack_overrides', value: JSON.stringify(overrides), updated_at: new Date().toISOString(),
+    })
+    if (error) { console.error('updateCoachingPack error:', error.message); throw new Error(error.message) }
     set(s => ({ coachingPacks: s.coachingPacks.map(p => p.id === id ? { ...p, ...updates } : p) }))
   },
 
@@ -467,10 +551,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       homework: data.homework, private_notes: data.privateNotes,
       meet_link: data.meetLink, zoom_link: data.zoomLink,
     }).select().single()
-    if (row) set(s => ({ coachingSessions: [mapSession(row), ...s.coachingSessions] }))
+    if (row) {
+      set(s => ({ coachingSessions: [mapSession(row), ...s.coachingSessions] }))
+      // Auto-increment usedSessions on the linked pack when session is completed
+      if (data.status === 'completed' && data.packId) {
+        const pack = get().coachingPacks.find(p => p.id === data.packId)
+        if (pack) await get().updateCoachingPack(data.packId, { usedSessions: (pack.usedSessions ?? 0) + 1 })
+      }
+    }
   },
 
   updateCoachingSession: async (id, updates) => {
+    const prev = get().coachingSessions.find(s => s.id === id)
     const patch: any = {}
     if (updates.date !== undefined) patch.date = updates.date
     if (updates.time !== undefined) patch.time = updates.time
@@ -479,8 +571,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (updates.objectives !== undefined) patch.objectives = updates.objectives
     if (updates.homework !== undefined) patch.homework = updates.homework
     if (updates.privateNotes !== undefined) patch.private_notes = updates.privateNotes
+    if (updates.meetLink !== undefined) patch.meet_link = updates.meetLink
     await supabase.from('coaching_sessions').update(patch).eq('id', id)
     set(s => ({ coachingSessions: s.coachingSessions.map(x => x.id === id ? { ...x, ...updates } : x) }))
+    // Auto-increment usedSessions when session transitions to completed
+    if (updates.status === 'completed' && prev?.status !== 'completed' && prev?.packId) {
+      const pack = get().coachingPacks.find(p => p.id === prev.packId)
+      if (pack) await get().updateCoachingPack(prev.packId, { usedSessions: (pack.usedSessions ?? 0) + 1 })
+    }
+    // Auto-decrement if un-completing a session
+    if (prev?.status === 'completed' && updates.status && updates.status !== 'completed' && prev?.packId) {
+      const pack = get().coachingPacks.find(p => p.id === prev.packId)
+      if (pack) await get().updateCoachingPack(prev.packId, { usedSessions: Math.max(0, (pack.usedSessions ?? 0) - 1) })
+    }
   },
 
   deleteCoachingSession: async (id) => {
@@ -488,8 +591,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     set(s => ({ coachingSessions: s.coachingSessions.filter(x => x.id !== id) }))
   },
 
+  updateAppointment: async (id, updates) => {
+    const patch: any = {}
+    if (updates.title !== undefined) patch.title = updates.title
+    if (updates.participantId !== undefined) patch.participant_id = updates.participantId
+    if (updates.participantName !== undefined) patch.participant_name = updates.participantName
+    if (updates.date !== undefined) patch.date = updates.date
+    if (updates.startTime !== undefined) patch.start_time = updates.startTime
+    if (updates.endTime !== undefined) patch.end_time = updates.endTime
+    if (updates.location !== undefined) patch.location = updates.location
+    if (updates.meetLink !== undefined) patch.meet_link = updates.meetLink
+    if (updates.notes !== undefined) patch.notes = updates.notes
+    if (updates.status !== undefined) patch.status = updates.status
+    if (updates.color !== undefined) patch.color = updates.color
+    const { error } = await supabaseAdmin.from('appointments').update(patch).eq('id', id)
+    if (error) throw new Error(error.message)
+    set(s => ({ appointments: s.appointments.map(a => a.id === id ? { ...a, ...updates } : a) }))
+  },
+
   deleteAppointment: async (id) => {
-    await supabase.from('appointments').delete().eq('id', id)
+    await supabaseAdmin.from('appointments').delete().eq('id', id)
     set(s => ({ appointments: s.appointments.filter(a => a.id !== id) }))
   },
 

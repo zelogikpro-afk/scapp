@@ -28,7 +28,7 @@ export default function LeadDetail({ lead, onClose }: { lead: Lead; onClose: () 
   const [activeTab, setActiveTab] = useState<'info' | 'edit' | 'notes' | 'history'>('info')
   const [converting, setConverting] = useState(false)
   const [convertDone, setConvertDone] = useState(false)
-  const { updateLead, deleteLead, addLeadNote, convertLeadToParticipant } = useAppStore()
+  const { updateLead, deleteLead, addLeadNote, convertLeadToParticipant, profiles } = useAppStore()
   const { user } = useAuthStore()
 
   // Edit form state
@@ -53,7 +53,17 @@ export default function LeadDetail({ lead, onClose }: { lead: Lead; onClose: () 
   }
 
   function handleStatusChange(status: LeadStatus) {
-    updateLead(lead.id, { status })
+    updateLead(lead.id, { status, lastTouchedBy: user?.name, lastTouchedAt: new Date().toISOString() })
+  }
+
+  function handleAssign(profileId: string) {
+    const profile = profiles.find(p => p.id === profileId)
+    updateLead(lead.id, {
+      assignedTo: profileId || undefined,
+      assignedToName: profile?.name || undefined,
+      lastTouchedBy: user?.name,
+      lastTouchedAt: new Date().toISOString(),
+    })
   }
 
   async function handleSaveEdit() {
@@ -132,6 +142,30 @@ export default function LeadDetail({ lead, onClose }: { lead: Lead; onClose: () 
           </div>
         </div>
 
+        {/* Affectation */}
+        <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+          <div className="flex-1">
+            <p className="text-xs text-gray-400 mb-1">Assigné à</p>
+            <select
+              value={lead.assignedTo ?? ''}
+              onChange={e => handleAssign(e.target.value)}
+              className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">— Non assigné</option>
+              {profiles.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          {lead.lastTouchedBy && (
+            <div className="text-right shrink-0">
+              <p className="text-xs text-gray-400">Dernière action</p>
+              <p className="text-xs font-medium text-gray-700 dark:text-gray-300">{lead.lastTouchedBy}</p>
+              <p className="text-xs text-gray-400">{timeAgo(lead.lastTouchedAt ?? '')}</p>
+            </div>
+          )}
+        </div>
+
         {/* Status Change */}
         <div>
           <p className="text-xs font-medium text-gray-500 mb-2">Changer le statut</p>
@@ -165,24 +199,108 @@ export default function LeadDetail({ lead, onClose }: { lead: Lead; onClose: () 
 
         {/* Tab Content */}
         {activeTab === 'info' && (
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              { label: 'Téléphone', value: lead.phone },
-              { label: 'WhatsApp', value: lead.whatsapp },
-              { label: 'Email', value: lead.email },
-              { label: 'Ville', value: lead.city },
-              { label: 'Profession', value: lead.profession },
-              { label: 'Programme intéressé', value: lead.programInterest },
-              { label: 'Niveau d\'intérêt', value: lead.interestLevel === 'high' ? 'Élevé' : lead.interestLevel === 'medium' ? 'Moyen' : lead.interestLevel === 'low' ? 'Faible' : undefined },
-              { label: 'Source', value: lead.source },
-              { label: 'Date de réception', value: formatDate(lead.createdAt) },
-              { label: 'Prochain rappel', value: lead.nextFollowUpDate ? formatDate(lead.nextFollowUpDate) : '—' },
-            ].map(({ label, value }) => (
-              <div key={label}>
-                <p className="text-xs text-gray-400 mb-0.5">{label}</p>
-                <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">{value || '—'}</p>
+          <div className="space-y-5">
+            {/* Contact */}
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Contact</p>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: 'Téléphone', value: lead.phone },
+                  { label: 'WhatsApp', value: lead.whatsapp },
+                  { label: 'Email', value: lead.email },
+                  { label: 'Ville', value: lead.city },
+                  { label: 'Genre', value: lead.genre === 'female' ? 'Femme' : lead.genre === 'male' ? 'Homme' : undefined },
+                  { label: 'Date de naissance', value: lead.dateNaissance ? formatDate(lead.dateNaissance) : undefined },
+                  { label: 'CIN', value: lead.cin },
+                  { label: 'Adresse', value: lead.adresse },
+                ].map(({ label, value }) => (
+                  <div key={label}>
+                    <p className="text-xs text-gray-400 mb-0.5">{label}</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">{value || '—'}</p>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+
+            {/* Formation / Qualification */}
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Formation & Qualification</p>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: 'Objectif principal', value: lead.programInterest },
+                  { label: 'Situation professionnelle', value: lead.profession },
+                  { label: 'Délai pour passer à l\'action', value: lead.delaiAction },
+                  { label: 'Disponibilité', value: lead.horairePreference },
+                  { label: 'Modalité', value: lead.modaliteParticipation === 'presentiel' ? 'Présentiel' : lead.modaliteParticipation === 'enligne' ? 'En ligne' : lead.modaliteParticipation },
+                  { label: 'Urgence', value: lead.interestLevel === 'high' ? '🔴 Urgent' : lead.interestLevel === 'medium' ? '🟠 Moyen terme' : lead.interestLevel === 'low' ? '🟢 Plus tard' : undefined },
+                  { label: 'Source', value: lead.source },
+                  { label: 'Campagne', value: lead.campaign },
+                  { label: 'Pub', value: lead.adSet },
+                ].map(({ label, value }) => value ? (
+                  <div key={label}>
+                    <p className="text-xs text-gray-400 mb-0.5">{label}</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">{value}</p>
+                  </div>
+                ) : null)}
+              </div>
+            </div>
+
+            {/* Paiement */}
+            {(lead.prixFormation || lead.montantVerse) ? (
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Paiement</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-gray-400 mb-0.5">Prix formation</p>
+                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{(lead.prixFormation ?? 0).toLocaleString('fr-MA')} MAD</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400 mb-0.5">Montant versé</p>
+                    <p className="text-sm font-semibold text-emerald-600">{(lead.montantVerse ?? 0).toLocaleString('fr-MA')} MAD</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400 mb-0.5">Reste à payer</p>
+                    <p className="text-sm font-semibold text-amber-600">{((lead.prixFormation ?? 0) - (lead.montantVerse ?? 0)).toLocaleString('fr-MA')} MAD</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400 mb-0.5">Modalité paiement</p>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {lead.modalitePaiement === 'complet' ? 'Paiement complet' : lead.modalitePaiement === 'acompte' ? 'Acompte + solde' : lead.modalitePaiement === 'echelonne' ? 'Échelonné (3x)' : lead.modalitePaiement || '—'}
+                    </p>
+                  </div>
+                  {lead.dateVersement2 && (
+                    <div>
+                      <p className="text-xs text-gray-400 mb-0.5">2e versement prévu</p>
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{formatDate(lead.dateVersement2)}</p>
+                    </div>
+                  )}
+                  {lead.dateVersement3 && (
+                    <div>
+                      <p className="text-xs text-gray-400 mb-0.5">3e versement prévu</p>
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{formatDate(lead.dateVersement3)}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {/* CRM */}
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">CRM</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-gray-400 mb-0.5">Date de réception</p>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}
+                    {lead.createdAt ? <span className="text-gray-400 ml-1">{new Date(lead.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span> : null}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 mb-0.5">Prochain rappel</p>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{lead.nextFollowUpDate ? formatDate(lead.nextFollowUpDate) : '—'}</p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

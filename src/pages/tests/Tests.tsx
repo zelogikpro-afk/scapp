@@ -16,6 +16,7 @@ import IEReportTemplate, { PAGE_W, PAGE_H } from '../test/IEReportTemplate'
 import QSReportTemplate from '../test/QSReportTemplate'
 import { QS_PILIER_ORDER, getPilierInfo, getPilierScore, getQSLevel, getTotalScore, getQSGlobalLevel } from '../../data/testQSQuestions'
 import { COMPASS_PROFILES, getAllScores, getDominantProfile, type CompassProfileKey } from '../../data/testCompassData'
+import { QUIZ_QUESTIONS } from '../../data/quizCoachData'
 import type { TestType } from '../../types'
 import toast from 'react-hot-toast'
 import { supabase, supabaseAdmin } from '../../lib/supabase'
@@ -26,6 +27,7 @@ const TEST_URL = `${window.location.origin}/test/mapping`
 const TEST_IE_URL = `${window.location.origin}/test/ie`
 const TEST_QS_URL = `${window.location.origin}/test/qs`
 const TEST_COMPASS_URL = `${window.location.origin}/test/compass`
+const TEST_QUIZ_COACH_URL = `${window.location.origin}/test/quiz-coach`
 
 const TEST_TYPES: TestType[] = ['DISC', 'MBTI', 'Enneagram', 'Life Wheel', 'Values', 'Ikigai', 'Strengths', 'LifeBook']
 
@@ -499,7 +501,13 @@ export default function Tests() {
   const [refreshingCompass, setRefreshingCompass] = useState(false)
   const [compassSortOrder, setCompassSortOrder] = useState<'desc' | 'asc'>('desc')
   const [selectedCompass, setSelectedCompass] = useState<any | null>(null)
-  const [activeTab, setActiveTab] = useState<'mapping' | 'ie' | 'qs' | 'compass' | 'psycho'>('mapping')
+  const [quizResults, setQuizResults] = useState<any[]>([])
+  const [loadingQuiz, setLoadingQuiz] = useState(true)
+  const [quizSearch, setQuizSearch] = useState('')
+  const [quizSortOrder, setQuizSortOrder] = useState<'desc' | 'asc'>('desc')
+  const [selectedQuiz, setSelectedQuiz] = useState<any | null>(null)
+  const [refreshingQuiz, setRefreshingQuiz] = useState(false)
+  const [activeTab, setActiveTab] = useState<'mapping' | 'ie' | 'qs' | 'compass' | 'quiz_coach' | 'psycho'>('mapping')
   const [search, setSearch] = useState('')
   const [ieSearch, setIESearch] = useState('')
   const [profileFilter, setProfileFilter] = useState<ProfileKey | 'all'>('all')
@@ -582,6 +590,29 @@ export default function Tests() {
     if (error) { toast.error('Erreur lors de la suppression'); return }
     toast.success('Résultat supprimé')
     setCompassResults(prev => prev.filter(r => r.id !== id))
+  }
+
+  async function loadQuizResults(showSpinner = true) {
+    if (showSpinner) setLoadingQuiz(true)
+    else setRefreshingQuiz(true)
+    const { data } = await supabase
+      .from('test_results')
+      .select('*')
+      .eq('test_type', 'quiz_coach')
+      .order('created_at', { ascending: false })
+    setQuizResults(data || [])
+    setLoadingQuiz(false)
+    setRefreshingQuiz(false)
+  }
+
+  useEffect(() => { loadQuizResults() }, [])
+
+  async function deleteQuizResult(id: string) {
+    if (!confirm('Supprimer ce résultat Quiz ?')) return
+    const { error } = await supabaseAdmin.from('test_results').delete().eq('id', id)
+    if (error) { toast.error('Erreur lors de la suppression'); return }
+    toast.success('Résultat supprimé')
+    setQuizResults(prev => prev.filter(r => r.id !== id))
   }
 
   async function downloadIEPDF(r: IEResult) {
@@ -750,6 +781,16 @@ export default function Tests() {
           }`}
         >
           🧭 Test Compass {compassResults.length > 0 && <span className="ml-1 text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full">{compassResults.length}</span>}
+        </button>
+        <button
+          onClick={() => { setActiveTab('quiz_coach'); loadQuizResults(false) }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === 'quiz_coach'
+              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          📝 Quiz Final {quizResults.length > 0 && <span className="ml-1 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{quizResults.length}</span>}
         </button>
         <button
           onClick={() => setActiveTab('psycho')}
@@ -1369,6 +1410,162 @@ export default function Tests() {
           </div>
         </div>
       )}
+
+      {/* TAB: QUIZ COACH */}
+      {activeTab === 'quiz_coach' && (
+        <div className="space-y-4">
+          {/* Lien passation */}
+          <div className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-100 dark:border-amber-800">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">Lien de passation — Quiz Final</p>
+              <p className="text-xs text-gray-400 truncate mt-0.5">{TEST_QUIZ_COACH_URL}</p>
+            </div>
+            <button onClick={() => { navigator.clipboard.writeText(TEST_QUIZ_COACH_URL); toast.success('Lien copié !') }}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-colors flex-shrink-0">
+              <Copy className="w-3.5 h-3.5" /> Copier
+            </button>
+            <a href={TEST_QUIZ_COACH_URL} target="_blank" rel="noreferrer"
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-colors flex-shrink-0">
+              <ExternalLink className="w-3.5 h-3.5" /> Ouvrir
+            </a>
+          </div>
+
+          {/* Search + sort + refresh */}
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input value={quizSearch} onChange={e => setQuizSearch(e.target.value)}
+                placeholder="Rechercher un participant…"
+                className="w-full pl-9 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-300" />
+            </div>
+            <button onClick={() => setQuizSortOrder(o => o === 'desc' ? 'asc' : 'desc')}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+              <ArrowUpDown className="w-4 h-4" />
+              {quizSortOrder === 'desc' ? 'Plus récent' : 'Plus ancien'}
+            </button>
+            <button onClick={() => loadQuizResults(false)} disabled={refreshingQuiz}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
+              <RefreshCw className={`w-4 h-4 ${refreshingQuiz ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          {loadingQuiz ? (
+            <div className="text-center py-12 text-gray-400">Chargement…</div>
+          ) : (
+            <>
+              <p className="text-xs text-gray-400">{quizResults.length} résultat{quizResults.length !== 1 ? 's' : ''}</p>
+              <div className="grid gap-3">
+                {quizResults
+                  .filter(r => {
+                    const q = quizSearch.toLowerCase()
+                    return !q || `${r.first_name} ${r.last_name}`.toLowerCase().includes(q) || (r.email || '').toLowerCase().includes(q)
+                  })
+                  .sort((a, b) => {
+                    const da = new Date(a.created_at).getTime()
+                    const db = new Date(b.created_at).getTime()
+                    return quizSortOrder === 'desc' ? db - da : da - db
+                  })
+                  .map(r => {
+                    const scores = r.scores || {}
+                    const pctVal = scores.percentage ?? Math.round(((scores.correct ?? 0) / (scores.total ?? 40)) * 100)
+                    const correct = scores.correct ?? 0
+                    const total40 = scores.total ?? 40
+                    const levelColor = pctVal >= 90 ? 'bg-green-100 text-green-700' : pctVal >= 70 ? 'bg-blue-100 text-blue-700' : pctVal >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                    return (
+                      <div key={r.id} onClick={() => setSelectedQuiz(r)}
+                        className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-4 flex items-center gap-4 hover:shadow-sm transition-all cursor-pointer">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-base font-bold"
+                          style={{ background: '#F5C54222', color: '#92400e' }}>
+                          {(r.first_name?.[0] || '?').toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{r.first_name} {r.last_name}</p>
+                          <p className="text-xs text-gray-400">{r.email || '—'}</p>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${levelColor}`}>
+                            {correct}/{total40} · {pctVal}%
+                          </span>
+                          <span className="text-xs text-gray-400">{r.dominant_profile}</span>
+                          <span className="text-xs text-gray-300">{formatDate(r.created_at)}</span>
+                          <button onClick={e => { e.stopPropagation(); deleteQuizResult(r.id) }}
+                            className="p-1.5 rounded-lg text-red-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                {quizResults.length === 0 && (
+                  <div className="text-center py-12 text-gray-400">
+                    <p className="text-4xl mb-3">📝</p>
+                    <p className="font-medium">Aucun résultat pour l'instant</p>
+                    <p className="text-sm mt-1">Partagez le lien de passation avec vos apprenants</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* QUIZ DETAIL MODAL */}
+      {selectedQuiz && (() => {
+        const r = selectedQuiz
+        const scores = r.scores || {}
+        const correct = scores.correct ?? 0
+        const total40 = scores.total ?? 40
+        const pctVal = scores.percentage ?? Math.round((correct / total40) * 100)
+        const answers = r.answers || {}
+        const levelColor = pctVal >= 90 ? { bg: '#dcfce7', color: '#166534' } : pctVal >= 70 ? { bg: '#dbeafe', color: '#1e40af' } : pctVal >= 50 ? { bg: '#fef3c7', color: '#92400e' } : { bg: '#fee2e2', color: '#991b1b' }
+
+        return (
+          <Modal open onClose={() => setSelectedQuiz(null)} title={`${r.first_name} ${r.last_name} — Quiz Final`} size="lg">
+            <div className="space-y-5">
+              {/* Score */}
+              <div className="flex items-center gap-4 p-4 rounded-xl" style={{ background: levelColor.bg }}>
+                <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold flex-shrink-0"
+                  style={{ background: 'white', color: levelColor.color, boxShadow: '0 0 0 3px ' + levelColor.color + '33' }}>
+                  {pctVal}%
+                </div>
+                <div>
+                  <p className="font-bold text-lg" style={{ color: levelColor.color }}>{r.dominant_profile}</p>
+                  <p className="text-sm" style={{ color: levelColor.color }}>{correct} bonnes réponses sur {total40}</p>
+                  <p className="text-xs text-gray-500 mt-1">{r.email && `${r.email} · `}{r.phone && `${r.phone} · `}{formatDate(r.created_at)}</p>
+                </div>
+              </div>
+
+              {/* Score par thème */}
+              {Object.keys(answers).length > 0 && (() => {
+                const themes = ['Fondamentaux du coaching', 'Communication & écoute', 'Techniques & outils', 'Gestion des situations', 'Reprogrammation & lois', 'Life Book & séance']
+                return (
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700 mb-3">Score par thème</p>
+                    <div className="space-y-2">
+                      {themes.map(theme => {
+                        const qs = QUIZ_QUESTIONS.filter(q => q.theme === theme)
+                        const ok = qs.filter(q => answers[q.id] === q.correct).length
+                        const themePct = Math.round((ok / qs.length) * 100)
+                        return (
+                          <div key={theme}>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-gray-600">{theme}</span>
+                              <span className="font-medium">{ok}/{qs.length}</span>
+                            </div>
+                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${themePct}%`, background: themePct >= 70 ? '#16a34a' : themePct >= 50 ? '#d97706' : '#dc2626' }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+          </Modal>
+        )
+      })()}
 
       {showNew && <NewTestModal onClose={() => setShowNew(false)} />}
       {selectedQS && (

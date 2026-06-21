@@ -1,57 +1,76 @@
 import { useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
-import { Upload, CheckCircle, AlertCircle, X } from 'lucide-react'
+import { Upload, CheckCircle, AlertCircle, X, RefreshCw, Plus } from 'lucide-react'
 import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
 import { useAppStore } from '../../store/appStore'
+import { supabaseAdmin } from '../../lib/supabase'
 import type { LeadStatus } from '../../types'
 
-// Convert Excel serial date to ISO string
-function excelDateToISO(serial: number): string {
-  if (!serial || typeof serial !== 'number') return new Date().toISOString()
-  const utcDays = Math.floor(serial - 25569)
-  return new Date(utcDays * 86400 * 1000).toISOString()
-}
-
-// Format phone: if numeric and 9 digits (Moroccan), prefix with 0
 function formatPhone(raw: string): string {
   if (!raw) return ''
-  const cleaned = raw.replace(/\s/g, '')
-  if (/^\d{9}$/.test(cleaned)) return '0' + cleaned
+  // Strip Meta's "p:" prefix
+  let cleaned = raw.replace(/^p:/i, '').replace(/\s/g, '')
+  // Convert +212XXXXXXXXX → 0XXXXXXXXX
+  if (cleaned.startsWith('+212')) cleaned = '0' + cleaned.slice(4)
+  if (/^\d{9}$/.test(cleaned)) cleaned = '0' + cleaned
   return cleaned
 }
 
-// Map Meta/Excel column names → our fields
-function mapRow(row: Record<string, any>) {
-  const get = (...keys: string[]) => {
-    for (const k of keys) {
-      const val = row[k] ?? row[k.toLowerCase()] ?? row[k.toUpperCase()]
-      if (val !== undefined && val !== null && val !== '') return String(val).trim()
+function formatLabel(s: string): string {
+  return (s || '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function formatDate(raw: string | number): string {
+  if (!raw) return ''
+  if (typeof raw === 'number') {
+    const utcDays = Math.floor(raw - 25569)
+    return new Date(utcDays * 86400 * 1000).toISOString()
+  }
+  try { return new Date(raw).toISOString() } catch { return '' }
+}
+
+function formatDateDisplay(iso: string): string {
+  if (!iso) return ''
+  try {
+    const d = new Date(iso)
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' +
+      d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  } catch { return iso }
+}
+
+function mapRow(headers: string[], vals: string[]) {
+  const col = (...keywords: string[]) => colByKeyword(headers, vals, ...keywords)
+  // Accès par nom exact (case-insensitive)
+  const exact = (...names: string[]) => {
+    for (const name of names) {
+      const idx = headers.findIndex(h => h.trim().toLowerCase() === name.trim().toLowerCase())
+      if (idx !== -1 && vals[idx]?.trim()) return vals[idx].trim()
     }
     return ''
   }
 
-  // — Meta Ads export (Arabic/French form fields) —
-  const nomComplet = get('nom_complet', 'Nom complet', 'nom complet', 'full_name', 'Full Name')
-  const metaPhone = get('numéro_de_téléphone', 'numero_de_telephone', 'Numéro de téléphone', 'phone_number')
-  const metaCity = get('ville', 'Ville', 'city', 'City', 'Localisation')
-  const metaCampaign = get('campaign_name', 'Campagne', 'Campaign', 'campaign')
-  const metaAdSet = get('adset_name', 'ad_name', 'Ad Set', 'Ensemble pub')
-  const metaPlatform = get('platform', 'Platform') // ig / fb
-  const metaObjectif = get("quel_est_votre_objectif_principal_aujourd'hui_?", 'objectif', 'programme', 'Programme')
-  const metaSituation = get("quelle_est_votre_situation_professionnelle_actuelle_?", 'situation', 'Profession', 'Métier')
-  const metaDelai = get("sous_combien_de_temps_souhaitez-vous_passer_à_l'action_?", 'delai', 'délai')
-  const metaCreatedTime = row['created_time']
+  const nomComplet = exact('nom_complet', 'nom complet', 'full_name')
+  const metaPhone = col('téléphone', 'telephone', 'phone')
+  const metaCity = exact('ville', 'city')
+  const metaCampaign = exact('campaign_name')
+  const metaAdName = exact('ad_name')
+  const metaPlatform = exact('platform')
+  const metaObjectif = col('objectif')
+  const metaSituation = col('situation')
+  const metaDelai = col('passer', 'sous_combien', 'action_?', 'delai')
+  const metaDisponibilite = col('disponible', 'moment')
+  const metaCreatedTime = exact('created_time')
+  const metaLeadId = exact('id')
 
-  // — Generic column names (manual imports) —
-  const statusRaw = get('Statut', 'Status', 'statut', 'status', 'État', 'lead_status')
+  const statusRaw = exact('lead_status', 'status', 'statut')
   const statusMap: Record<string, LeadStatus> = {
     'a contacter': 'to_contact', 'à contacter': 'to_contact',
     'contacté': 'contacted', 'contacte': 'contacted',
     'injoignable': 'no_answer', 'pas de réponse': 'no_answer',
     'en réflexion': 'callback', 'rappel': 'callback',
     'intéressé': 'interested', 'interesse': 'interested',
-    'rendez-vous fixé': 'appointment', 'rdv fixé': 'appointment', 'rdv': 'appointment',
+    'rendez-vous fixé': 'appointment', 'rdv': 'appointment',
     'paiement en attente': 'pending_payment',
     'inscrit': 'registered',
     'refus': 'not_interested', 'pas intéressé': 'not_interested',
@@ -59,61 +78,130 @@ function mapRow(row: Record<string, any>) {
   }
   const status: LeadStatus = statusMap[statusRaw.toLowerCase()] ?? 'new'
 
-  // Interest level from Meta "délai" field
-  const interestLevelFromDelai = (d: string): 'low' | 'medium' | 'high' | '' => {
-    if (!d) return ''
-    if (d.includes('imméd')) return 'high'
+  const interestLevel = (() => {
+    const d = metaDelai.toLowerCase()
+    if (d.includes('imméd') || d.includes('immed')) return 'high'
     if (d.includes('1') || d.includes('3') || d.includes('mois')) return 'medium'
     if (d.includes('plus_tard') || d.includes('renseigne')) return 'low'
     return ''
-  }
+  })()
 
-  // Build name: prefer nom_complet, fallback to Prénom + Nom columns
   let firstName = ''
   let lastName = ''
   if (nomComplet) {
-    const parts = nomComplet.split(/\s+/)
+    const parts = nomComplet.replace(/^"/, '').replace(/"$/, '').split(/\s+/)
     firstName = parts[0] || 'Inconnu'
     lastName = parts.slice(1).join(' ')
   } else {
-    firstName = get('Prénom', 'prenom', 'First Name', 'first_name').split(' ')[0] || 'Inconnu'
-    lastName = get('Nom', 'Last Name', 'last_name')
-    if (!lastName) lastName = get('Prénom', 'prenom', 'First Name', 'first_name').split(' ').slice(1).join(' ')
+    firstName = exact('prénom', 'prenom', 'first_name') || 'Inconnu'
+    lastName = exact('nom', 'last_name')
   }
 
-  // Source label
-  const sourceLabel = metaPlatform === 'ig' ? 'Instagram' : metaPlatform === 'fb' ? 'Facebook' : get('Source', 'source') || 'Meta'
-
-  // createdAt from Excel serial date if available
-  const createdAt = typeof metaCreatedTime === 'number' ? excelDateToISO(metaCreatedTime) : new Date().toISOString()
+  const sourceLabel = metaPlatform === 'ig' ? 'Instagram' : metaPlatform === 'fb' ? 'Facebook' : exact('source') || 'Meta'
+  const createdAt = formatDate(metaCreatedTime)
 
   return {
+    _leadId: metaLeadId,
+    _createdAt: createdAt,
+    _platform: metaPlatform,
+    _adName: metaAdName,
+    _objectif: metaObjectif,
+    _situation: metaSituation,
+    _delai: metaDelai,
+    _disponibilite: metaDisponibilite,
     firstName,
     lastName,
-    phone: formatPhone(metaPhone || get('Téléphone', 'Tel', 'Phone', 'phone', 'Numéro', 'numero', 'Phone Number')),
-    email: get('Email', 'email', 'E-mail'),
-    city: metaCity,
-    profession: metaSituation || get('Profession', 'Métier', 'Activité', 'metier'),
-    programInterest: metaObjectif || get('Programme', 'Intérêt', 'program_interest', 'Formation'),
+    phone: formatPhone(metaPhone),
+    email: exact('email', 'e-mail'),
+    city: metaCity.replace(/^"/, '').replace(/"$/, ''),
+    profession: metaSituation,
+    programInterest: metaObjectif,
     source: sourceLabel,
-    campaign: metaCampaign,
-    adSet: metaAdSet,
+    campaign: metaCampaign.replace(/^"/, '').replace(/"$/, ''),
+    adSet: exact('adset_name'),
     status,
-    interestLevel: (interestLevelFromDelai(metaDelai) || get('Niveau', 'interest_level') || '') as any,
+    interestLevel: interestLevel as any,
     createdAt,
   }
 }
 
+// Parse a UTF-16 tab-separated file (Meta Ads export format)
+// Retourne { headers, rows } avec accès positional fiable
+function parseMetaTSV(buffer: ArrayBuffer): { headers: string[]; rows: string[][] } | null {
+  // Essaie UTF-16 LE d'abord (export Meta standard)
+  for (const enc of ['utf-16', 'utf-16le', 'utf-8'] as const) {
+    try {
+      const decoder = new TextDecoder(enc)
+      let text = decoder.decode(buffer)
+      // Supprimer BOM (U+FEFF) s'il est présent au début
+      text = text.replace(/^﻿/, '')
+      const lines = text.split(/\r?\n/).filter(l => l.trim())
+      if (lines.length < 2) continue
+      const headers = lines[0].split('\t').map(h => h.trim())
+      // Vérifier qu'on a bien un export Meta (doit avoir 'id' et 'platform')
+      const hasId = headers.some(h => h === 'id' || h.endsWith('id'))
+      const hasPlatform = headers.some(h => h.toLowerCase() === 'platform')
+      if (!hasId || !hasPlatform) continue
+      const rows: string[][] = []
+      for (let i = 1; i < lines.length; i++) {
+        const vals = lines[i].split('\t').map(v => v.trim())
+        if (vals.every(v => !v)) continue
+        rows.push(vals)
+      }
+      if (rows.length > 0) return { headers, rows }
+    } catch { continue }
+  }
+  return null
+}
+
+// Cherche la valeur d'une colonne par mot-clé dans le nom du header
+function colByKeyword(headers: string[], vals: string[], ...keywords: string[]): string {
+  for (const kw of keywords) {
+    const idx = headers.findIndex(h => h.toLowerCase().includes(kw.toLowerCase()))
+    if (idx !== -1 && vals[idx]?.trim()) return vals[idx].trim()
+  }
+  return ''
+}
+
+type SortKey = 'date' | 'name' | 'city' | 'objectif' | 'delai' | 'platform'
+
 export default function ImportLeadsModal({ onClose }: { onClose: () => void }) {
-  const { addLead } = useAppStore()
+  const { addLead, fetchLeads } = useAppStore()
   const fileRef = useRef<HTMLInputElement>(null)
   const [rows, setRows] = useState<ReturnType<typeof mapRow>[]>([])
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [fileName, setFileName] = useState('')
   const [importing, setImporting] = useState(false)
   const [done, setDone] = useState(0)
+  const [updated, setUpdated] = useState(0)
   const [errors, setErrors] = useState<string[]>([])
   const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload')
+  const [sortKey, setSortKey] = useState<SortKey>('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
+  }
+
+  function sortedRows() {
+    return [...rows].map((r, i) => ({ ...r, _origIdx: i })).sort((a, b) => {
+      let va = '', vb = ''
+      if (sortKey === 'date') { va = a._createdAt; vb = b._createdAt }
+      else if (sortKey === 'name') { va = `${a.firstName} ${a.lastName}`; vb = `${b.firstName} ${b.lastName}` }
+      else if (sortKey === 'city') { va = a.city; vb = b.city }
+      else if (sortKey === 'objectif') { va = a._objectif; vb = b._objectif }
+      else if (sortKey === 'delai') { va = a.interestLevel; vb = b.interestLevel }
+      else if (sortKey === 'platform') { va = a._platform; vb = b._platform }
+      const cmp = va.localeCompare(vb, 'fr', { sensitivity: 'base' })
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }
+
+  function SortIcon({ k }: { k: SortKey }) {
+    if (sortKey !== k) return <span className="text-gray-300 ml-1">↕</span>
+    return <span className="text-blue-500 ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>
+  }
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -121,11 +209,28 @@ export default function ImportLeadsModal({ onClose }: { onClose: () => void }) {
     setFileName(file.name)
     const reader = new FileReader()
     reader.onload = ev => {
-      const data = ev.target?.result
-      const wb = XLSX.read(data, { type: 'array' })
-      const sheet = wb.Sheets[wb.SheetNames[0]]
-      const json: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: '' })
-      const mapped = json.map(mapRow).filter(r => r.phone || r.firstName !== 'Inconnu')
+      const buffer = ev.target?.result as ArrayBuffer
+      let mapped: ReturnType<typeof mapRow>[] = []
+
+      // Essai export Meta (UTF-16 TSV)
+      const tsv = parseMetaTSV(buffer)
+      if (tsv) {
+        mapped = tsv.rows
+          .map(vals => mapRow(tsv.headers, vals))
+          .filter(r => r.phone || r.firstName !== 'Inconnu')
+      } else {
+        // Fallback: XLSX/CSV standard
+        const wb = XLSX.read(buffer, { type: 'array', codepage: 65001 })
+        const sheet = wb.Sheets[wb.SheetNames[0]]
+        const json = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '' })
+        if (json.length > 0) {
+          const headers = Object.keys(json[0])
+          mapped = json
+            .map(row => mapRow(headers, headers.map(h => String(row[h] ?? ''))))
+            .filter(r => r.phone || r.firstName !== 'Inconnu')
+        }
+      }
+
       setRows(mapped)
       setSelected(new Set(mapped.map((_, i) => i)))
       setStep('preview')
@@ -136,36 +241,74 @@ export default function ImportLeadsModal({ onClose }: { onClose: () => void }) {
   async function handleImport() {
     setImporting(true)
     const errs: string[] = []
-    let count = 0
+    let inserted = 0
+    let updatedCount = 0
     const toImport = rows.filter((_, i) => selected.has(i))
+
     for (const row of toImport) {
+      const payload = {
+        first_name: row.firstName,
+        last_name: row.lastName,
+        phone: row.phone,
+        whatsapp: row.phone || null,
+        email: row.email || null,
+        city: row.city || null,
+        profession: row.profession || null,
+        program_interest: row.programInterest || null,
+        source: row.source,
+        campaign: row.campaign || null,
+        ad_set: row.adSet || null,
+        status: row.status,
+        interest_level: row.interestLevel || null,
+        horaire_preference: row._disponibilite || null,
+        delai_action: row._delai || null,
+        meta_lead_id: row._leadId || null,
+        created_at: row._createdAt || undefined,
+      }
+
       try {
-        await addLead({
-          firstName: row.firstName,
-          lastName: row.lastName,
-          phone: row.phone,
-          email: row.email || undefined,
-          city: row.city || undefined,
-          profession: row.profession || undefined,
-          programInterest: row.programInterest || undefined,
-          source: row.source,
-          campaign: row.campaign || undefined,
-          adSet: row.adSet || undefined,
-          status: row.status,
-          interestLevel: row.interestLevel || undefined,
-          whatsapp: undefined, facebookName: undefined, instagram: undefined,
-          assignedTo: undefined, tags: [], nextFollowUpDate: undefined,
-        })
-        count++
-        setDone(count)
+        // 1) Try to match by meta_lead_id
+        let existingId: string | null = null
+        if (row._leadId) {
+          const { data: byId } = await supabaseAdmin
+            .from('leads').select('id').eq('meta_lead_id', row._leadId).maybeSingle()
+          if (byId) existingId = byId.id
+        }
+        // 2) Fallback: match by phone
+        if (!existingId && row.phone) {
+          const { data: byPhone } = await supabaseAdmin
+            .from('leads').select('id').eq('phone', row.phone).maybeSingle()
+          if (byPhone) existingId = byPhone.id
+        }
+
+        if (existingId) {
+          // UPDATE existing lead — on écrase created_at avec la vraie date Meta
+          const updatePayload: Record<string, any> = { ...payload }
+          if (!updatePayload.created_at) delete updatePayload.created_at
+          const { error } = await supabaseAdmin.from('leads').update(updatePayload).eq('id', existingId)
+          if (error) throw error
+          updatedCount++
+          setUpdated(updatedCount)
+        } else {
+          // INSERT new lead
+          const { error } = await supabaseAdmin.from('leads').insert(payload)
+          if (error) throw error
+          inserted++
+          setDone(inserted)
+        }
       } catch (err: any) {
         errs.push(`${row.firstName} ${row.lastName}: ${err.message || 'Erreur'}`)
       }
     }
+
+    await fetchLeads()
     setErrors(errs)
     setImporting(false)
     setStep('done')
   }
+
+  const URGENCY_LABEL: Record<string, string> = { high: 'Urgent', medium: 'Moyen', low: 'Plus tard' }
+  const URGENCY_COLOR: Record<string, string> = { high: 'bg-red-100 text-red-700', medium: 'bg-amber-100 text-amber-700', low: 'bg-gray-100 text-gray-500' }
 
   return (
     <Modal open onClose={onClose} title="Importer des leads" size="lg">
@@ -178,12 +321,12 @@ export default function ImportLeadsModal({ onClose }: { onClose: () => void }) {
             >
               <Upload className="w-10 h-10 text-gray-400 mx-auto mb-3" />
               <p className="text-base font-medium text-gray-700 dark:text-gray-300">Cliquer pour sélectionner le fichier</p>
-              <p className="text-sm text-gray-400 mt-1">Fichier Excel (.xlsx) ou CSV exporté depuis Meta Ads / autre source</p>
+              <p className="text-sm text-gray-400 mt-1">Fichier CSV exporté depuis Meta Ads (.csv)</p>
               <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
             </div>
             <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-xs text-blue-700 dark:text-blue-300 space-y-1">
-              <p className="font-semibold">Colonnes reconnues automatiquement :</p>
-              <p>Prénom, Nom, Téléphone, Email, Ville, Profession, Programme, Source, Statut, Campagne</p>
+              <p className="font-semibold">Format Meta Ads reconnu automatiquement :</p>
+              <p>id · created_time · ad_name · campaign_name · platform · nom_complet · numéro_de_téléphone · ville · objectif · situation · délai · disponibilité</p>
             </div>
           </div>
         )}
@@ -192,46 +335,109 @@ export default function ImportLeadsModal({ onClose }: { onClose: () => void }) {
           <div className="space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
-                <p className="font-semibold text-gray-900 dark:text-gray-100">{rows.length} leads détectés — <span className="text-blue-600">{selected.size} sélectionnés</span></p>
+                <p className="font-semibold text-gray-900 dark:text-gray-100">
+                  {rows.length} leads détectés — <span className="text-blue-600">{selected.size} sélectionnés</span>
+                </p>
                 <p className="text-xs text-gray-400 mt-0.5">{fileName}</p>
               </div>
-              <Button variant="outline" size="sm" icon={<X className="w-3.5 h-3.5" />} onClick={() => { setStep('upload'); setRows([]); setSelected(new Set()) }}>
+              <Button variant="outline" size="sm" icon={<X className="w-3.5 h-3.5" />}
+                onClick={() => { setStep('upload'); setRows([]); setSelected(new Set()) }}>
                 Changer de fichier
               </Button>
             </div>
-            <div className="max-h-80 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-800">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
+
+            <div className="max-h-[60vh] overflow-auto rounded-xl border border-gray-100 dark:border-gray-800">
+              <table className="w-full text-xs min-w-[900px]">
+                <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
                   <tr>
                     <th className="px-3 py-2">
-                      <input type="checkbox" checked={selected.size === rows.length} onChange={e => setSelected(e.target.checked ? new Set(rows.map((_, i) => i)) : new Set())} className="rounded" />
+                      <input type="checkbox"
+                        checked={selected.size === rows.length}
+                        onChange={e => setSelected(e.target.checked ? new Set(rows.map((_, i) => i)) : new Set())}
+                        className="rounded" />
                     </th>
-                    {['Nom complet', 'Téléphone', 'Ville', 'Objectif', 'Situation', 'Niveau', 'Source', 'Campagne'].map(h => (
-                      <th key={h} className="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400">{h}</th>
+                    {([
+                      { label: 'Date réception', k: 'date' },
+                      { label: 'Plateforme',     k: 'platform' },
+                      { label: 'Nom complet',    k: 'name' },
+                      { label: 'Téléphone',      k: null },
+                      { label: 'Ville',          k: 'city' },
+                      { label: 'Objectif',       k: 'objectif' },
+                      { label: 'Situation',      k: null },
+                      { label: 'Délai',          k: 'delai' },
+                      { label: 'Disponibilité',  k: null },
+                      { label: 'Pub',            k: null },
+                    ] as { label: string; k: SortKey | null }[]).map(({ label, k }) => (
+                      <th key={label}
+                        className={`text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap select-none ${k ? 'cursor-pointer hover:text-blue-600' : ''}`}
+                        onClick={() => k && handleSort(k)}>
+                        {label}{k && <SortIcon k={k} />}
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r, i) => (
-                    <tr key={i} className={`border-t border-gray-50 dark:border-gray-800 ${selected.has(i) ? 'bg-blue-50/30 dark:bg-blue-900/10' : 'opacity-50'}`}>
-                      <td className="px-3 py-1.5">
-                        <input type="checkbox" checked={selected.has(i)} onChange={e => { const s = new Set(selected); e.target.checked ? s.add(i) : s.delete(i); setSelected(s) }} className="rounded" />
+                  {sortedRows().map((r) => {
+                    const i = (r as any)._origIdx
+                    return (
+                    <tr key={i} className={`border-t border-gray-50 dark:border-gray-800 ${selected.has(i) ? '' : 'opacity-40'}`}>
+                      <td className="px-3 py-2">
+                        <input type="checkbox" checked={selected.has(i)}
+                          onChange={e => { const s = new Set(selected); e.target.checked ? s.add(i) : s.delete(i); setSelected(s) }}
+                          className="rounded" />
                       </td>
-                      <td className="px-3 py-1.5 text-gray-800 dark:text-gray-200 font-medium whitespace-nowrap">{r.firstName} {r.lastName}</td>
-                      <td className="px-3 py-1.5 text-gray-600 dark:text-gray-400 whitespace-nowrap">{r.phone}</td>
-                      <td className="px-3 py-1.5 text-gray-600 dark:text-gray-400">{r.city}</td>
-                      <td className="px-3 py-1.5 text-gray-600 dark:text-gray-400 max-w-[120px] truncate" title={r.programInterest}>{r.programInterest?.replace(/_/g, ' ')}</td>
-                      <td className="px-3 py-1.5 text-gray-600 dark:text-gray-400 max-w-[120px] truncate" title={r.profession}>{r.profession?.replace(/_/g, ' ')}</td>
-                      <td className="px-3 py-1.5">
-                        {r.interestLevel && <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${r.interestLevel === 'high' ? 'bg-red-100 text-red-700' : r.interestLevel === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>{r.interestLevel === 'high' ? 'Urgent' : r.interestLevel === 'medium' ? 'Moyen' : 'Bas'}</span>}
+                      {/* Date */}
+                      <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{formatDateDisplay(r._createdAt)}</td>
+                      {/* Platform */}
+                      <td className="px-3 py-2">
+                        {r._platform === 'ig' ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-pink-50 text-pink-600 font-medium text-xs">
+                            📸 IG
+                          </span>
+                        ) : r._platform === 'fb' ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-medium text-xs">
+                            👤 FB
+                          </span>
+                        ) : <span className="text-gray-400">{r._platform}</span>}
                       </td>
-                      <td className="px-3 py-1.5 text-gray-600 dark:text-gray-400">{r.source}</td>
-                      <td className="px-3 py-1.5 text-gray-500 dark:text-gray-500 max-w-[100px] truncate" title={r.campaign}>{r.campaign}</td>
+                      {/* Name */}
+                      <td className="px-3 py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                        {r.firstName} {r.lastName}
+                      </td>
+                      {/* Phone */}
+                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap font-mono">{r.phone}</td>
+                      {/* City */}
+                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">{r.city}</td>
+                      {/* Objectif */}
+                      <td className="px-3 py-2 text-gray-600 max-w-[130px] truncate" title={formatLabel(r._objectif)}>
+                        {formatLabel(r._objectif)}
+                      </td>
+                      {/* Situation pro */}
+                      <td className="px-3 py-2 text-gray-600 max-w-[110px] truncate" title={formatLabel(r._situation)}>
+                        {formatLabel(r._situation)}
+                      </td>
+                      {/* Délai */}
+                      <td className="px-3 py-2">
+                        {r.interestLevel ? (
+                          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${URGENCY_COLOR[r.interestLevel] || 'bg-gray-100 text-gray-500'}`}>
+                            {URGENCY_LABEL[r.interestLevel] || r.interestLevel}
+                          </span>
+                        ) : <span className="text-gray-400">{formatLabel(r._delai)}</span>}
+                      </td>
+                      {/* Disponibilité */}
+                      <td className="px-3 py-2 text-gray-500 max-w-[100px] truncate" title={formatLabel(r._disponibilite)}>
+                        {formatLabel(r._disponibilite)}
+                      </td>
+                      {/* Pub */}
+                      <td className="px-3 py-2 text-gray-400 max-w-[90px] truncate" title={r._adName}>
+                        {r._adName}
+                      </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>
+
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={onClose}>Annuler</Button>
               <Button variant="primary" onClick={handleImport} disabled={importing || selected.size === 0}>
@@ -245,12 +451,28 @@ export default function ImportLeadsModal({ onClose }: { onClose: () => void }) {
           <div className="text-center space-y-4 py-4">
             <CheckCircle className="w-14 h-14 text-emerald-500 mx-auto" />
             <div>
-              <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{done} leads importés !</p>
+              <p className="text-xl font-bold text-gray-900 dark:text-gray-100">Import terminé !</p>
+              <div className="flex gap-4 justify-center mt-3">
+                {done > 0 && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-medium">
+                    <Plus className="w-4 h-4" />
+                    {done} nouveau{done > 1 ? 'x' : ''}
+                  </div>
+                )}
+                {updated > 0 && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium">
+                    <RefreshCw className="w-4 h-4" />
+                    {updated} mis à jour
+                  </div>
+                )}
+              </div>
               {errors.length > 0 && (
                 <div className="mt-3 text-left max-h-32 overflow-y-auto">
                   <p className="text-xs font-semibold text-red-600 mb-1">{errors.length} erreurs :</p>
                   {errors.map((e, i) => (
-                    <p key={i} className="text-xs text-red-500 flex gap-1.5 items-start"><AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />{e}</p>
+                    <p key={i} className="text-xs text-red-500 flex gap-1.5 items-start">
+                      <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />{e}
+                    </p>
                   ))}
                 </div>
               )}
