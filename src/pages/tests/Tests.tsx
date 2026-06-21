@@ -17,7 +17,7 @@ import QSReportTemplate from '../test/QSReportTemplate'
 import { QS_PILIER_ORDER, getPilierInfo, getPilierScore, getQSLevel, getTotalScore, getQSGlobalLevel } from '../../data/testQSQuestions'
 import type { TestType } from '../../types'
 import toast from 'react-hot-toast'
-import { supabase } from '../../lib/supabase'
+import { supabase, supabaseAdmin } from '../../lib/supabase'
 
 const SUPABASE_URL = 'https://twcqvpgpzayjxiwzzesb.supabase.co'
 
