@@ -13,6 +13,8 @@ import { PROFILE_NAMES, PROFILE_DESCRIPTIONS, type ProfileKey } from '../../data
 import { getIELevel, getLevelColor, SECTION_ORDER as IE_SECTION_ORDER, getDimInfo, IE_QUESTIONS, getDimContent, type IEDimension } from '../../data/testIEQuestions'
 import { QUESTIONS as MAPPING_QUESTIONS } from '../../data/testMappingQuestions'
 import IEReportTemplate, { PAGE_W, PAGE_H } from '../test/IEReportTemplate'
+import QSReportTemplate from '../test/QSReportTemplate'
+import { QS_PILIER_ORDER, getPilierInfo, getPilierScore, getQSLevel, getTotalScore, getQSGlobalLevel } from '../../data/testQSQuestions'
 import type { TestType } from '../../types'
 import toast from 'react-hot-toast'
 import { supabase } from '../../lib/supabase'
@@ -163,6 +165,70 @@ function IEDetailModal({ result, onClose, onDownload, downloading }: {
               )
             })}
           </div>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function QSDetailModal({ result, onClose, onDownload, downloading }: {
+  result: any; onClose: () => void; onDownload: () => void; downloading: boolean
+}) {
+  const answers = result.answers || {}
+  const total = getTotalScore(answers)
+  const pct = Math.round((total / 90) * 100)
+  const level = getQSGlobalLevel(total)
+  const colMap: Record<string, string> = { forte: '#22c55e', moyenne: '#f59e0b', faible: '#ef4444' }
+  const lblMap: Record<string, string> = { forte: 'Forte', moyenne: 'Moyenne', faible: 'Faible' }
+
+  return (
+    <Modal open onClose={onClose} title={`${result.first_name} ${result.last_name} — Test QS`} size="lg">
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-3 text-sm text-gray-600 dark:text-gray-400">
+          {result.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{result.email}</span>}
+          {result.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{result.phone}</span>}
+          <span className="flex items-center gap-1 font-medium text-gray-700 dark:text-gray-300">
+            <Calendar className="w-3.5 h-3.5" />
+            {new Date(result.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}
+            {' à '}
+            {new Date(result.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+
+        <div className="flex gap-3">
+          <div className="flex-1 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-xl p-4 text-center">
+            <p className="text-2xl font-bold text-teal-700 dark:text-teal-400">{pct}% <span className="text-sm font-normal text-teal-600">— {level}</span></p>
+            <p className="text-xs text-teal-600 mt-0.5">Score global Quotient de Succès</p>
+          </div>
+          <button onClick={onDownload} disabled={downloading}
+            className="flex flex-col items-center justify-center gap-1.5 px-5 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-xl text-xs font-medium transition-colors flex-shrink-0">
+            <Download className="w-5 h-5" />
+            {downloading ? 'Génération…' : 'PDF'}
+          </button>
+        </div>
+
+        <div className="space-y-2.5">
+          {QS_PILIER_ORDER.map(pilier => {
+            const info = getPilierInfo(pilier)
+            const score = getPilierScore(pilier, answers)
+            const lv = getQSLevel(score, info.maxScore)
+            const col = colMap[lv]
+            const p = Math.round((score / info.maxScore) * 100)
+            return (
+              <div key={pilier} className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-gray-800 dark:text-gray-200">{info.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold" style={{ color: col }}>{lblMap[lv]}</span>
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{p}%</span>
+                  </div>
+                </div>
+                <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${p}%`, background: col }} />
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
     </Modal>
@@ -431,10 +497,13 @@ export default function Tests() {
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
   const [ieSortOrder, setIESortOrder] = useState<'desc' | 'asc'>('desc')
   const [selectedIE, setSelectedIE] = useState<IEResult | null>(null)
+  const [selectedQS, setSelectedQS] = useState<any | null>(null)
   const [refreshingIE, setRefreshingIE] = useState(false)
   const [refreshingMapping, setRefreshingMapping] = useState(false)
   const [downloadingIE, setDownloadingIE] = useState(false)
+  const [downloadingQS, setDownloadingQS] = useState(false)
   const ieReportRef = useRef<HTMLDivElement>(null)
+  const qsReportRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { fetchTests() }, [])
 
@@ -507,6 +576,31 @@ export default function Tests() {
       toast.error('Erreur lors de la génération du PDF')
     }
     setDownloadingIE(false)
+  }
+
+  async function downloadQSPDF(r: any) {
+    if (!qsReportRef.current) return
+    setDownloadingQS(true)
+    try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ])
+      const pages = Array.from(qsReportRef.current.children) as HTMLElement[]
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [PAGE_W, PAGE_H] })
+      for (let i = 0; i < pages.length; i++) {
+        const canvas = await html2canvas(pages[i], {
+          scale: 2, useCORS: true, allowTaint: true,
+          backgroundColor: '#ffffff', width: PAGE_W, height: PAGE_H,
+        })
+        if (i > 0) pdf.addPage([PAGE_W, PAGE_H], 'portrait')
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, PAGE_W, PAGE_H)
+      }
+      pdf.save(`TEST QS_${r.first_name} ${r.last_name?.toUpperCase()}.pdf`)
+    } catch (e) {
+      toast.error('Erreur lors de la génération du PDF')
+    }
+    setDownloadingQS(false)
   }
 
   async function downloadPDF(r: MappingResult) {
@@ -942,11 +1036,11 @@ export default function Tests() {
                 {qsResults
                   .filter(r => `${r.first_name} ${r.last_name}`.toLowerCase().includes(qsSearch.toLowerCase()))
                   .map(r => {
-                    const scores = r.scores || {}
-                    const total = Object.values(scores).reduce((s: number, v: any) => s + (Number(v) || 0), 0)
-                    const pct = Math.round((total / 450) * 100)
+                    const answers = r.answers || {}
+                    const total = getTotalScore(answers)
+                    const pct = Math.round((total / 90) * 100)
                     return (
-                      <Card key={r.id} className="border border-gray-100 dark:border-gray-700 hover:border-teal-200 transition-colors">
+                      <Card key={r.id} className="border border-gray-100 dark:border-gray-700 hover:border-teal-200 transition-colors cursor-pointer" onClick={() => setSelectedQS(r)}>
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-blue-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
                             {r.first_name?.[0]}{r.last_name?.[0]}
@@ -972,7 +1066,7 @@ export default function Tests() {
                                 <div className="h-full rounded-full bg-gradient-to-r from-teal-500 to-blue-600"
                                   style={{ width: `${pct}%` }} />
                               </div>
-                              <span className="text-xs font-bold text-teal-600">{total}/450</span>
+                              <span className="text-xs font-bold text-teal-600">{pct}%</span>
                             </div>
                           </div>
                         </div>
@@ -1059,6 +1153,24 @@ export default function Tests() {
       )}
 
       {showNew && <NewTestModal onClose={() => setShowNew(false)} />}
+      {selectedQS && (
+        <>
+          <QSDetailModal
+            result={selectedQS}
+            onClose={() => setSelectedQS(null)}
+            onDownload={() => downloadQSPDF(selectedQS)}
+            downloading={downloadingQS}
+          />
+          <div style={{ position: 'fixed', left: -9999, top: 0, pointerEvents: 'none' }}>
+            <QSReportTemplate
+              ref={qsReportRef}
+              firstName={selectedQS.first_name}
+              lastName={selectedQS.last_name}
+              answers={selectedQS.answers || {}}
+            />
+          </div>
+        </>
+      )}
       {selectedIE && (
         <>
           <IEDetailModal
