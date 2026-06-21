@@ -1,8 +1,7 @@
 import { forwardRef } from 'react'
 import {
-  QS_PILIER_ORDER, getQSLevel, getPilierInfo, getPilierScore,
-  getQSGlobalLevel, getTotalScore,
-  type QSPilier,
+  getTop5Forces, getBottom5Axes, getPilierInfo,
+  getTotalScore, getQSGlobalLevel, QS_GLOBAL_CONTENT,
 } from '../../data/testQSQuestions'
 
 interface Props {
@@ -47,88 +46,59 @@ function Page({ children }: { children: React.ReactNode }) {
 // ── COVER PAGE ────────────────────────────────────────────────────────────────
 function CoverPage({ firstName, lastName, answers }: Props) {
   const total       = getTotalScore(answers)
-  const globalLevel = getQSGlobalLevel(total)
-
-  const colMap: Record<string, string> = {
-    forte: '#22c55e', moyenne: '#f59e0b', faible: '#ef4444',
-  }
-  const lblMap: Record<string, string> = {
-    forte: 'Forte', moyenne: 'Moyenne', faible: 'Faible',
-  }
+  const levelKey    = getQSGlobalLevel(total)
+  const content     = QS_GLOBAL_CONTENT[levelKey]
 
   return (
     <Page>
       {/* Header */}
-      <div style={{ padding: '30px 48px 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+      <div style={{ padding: '40px 56px 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 400, color: '#999', letterSpacing: 5, textTransform: 'uppercase', marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 400, color: '#999', letterSpacing: 5, textTransform: 'uppercase', marginBottom: 10 }}>
             RAPPORT DE
           </div>
-          <div style={{ fontSize: 38, fontWeight: 900, color: NAVY, lineHeight: 1.05, textTransform: 'uppercase' }}>
-            QUOTIENT DE
+          <div style={{ fontSize: 42, fontWeight: 300, color: NAVY, lineHeight: 1.0, textTransform: 'uppercase' }}>
+            Quotient
           </div>
-          <div style={{ fontSize: 38, fontWeight: 900, color: NAVY, lineHeight: 1.05, textTransform: 'uppercase' }}>
-            SUCCÈS
+          <div style={{ fontSize: 56, fontWeight: 900, color: NAVY, lineHeight: 1.0, textTransform: 'uppercase' }}>
+            DE SUCCÈS
           </div>
-          <div style={{ marginTop: 12, height: 4, width: 56, background: TEAL, borderRadius: 2 }} />
+          <div style={{ marginTop: 16, height: 4, width: 64, background: TEAL, borderRadius: 2 }} />
         </div>
-        <img src="/logo.png" alt="Success Compass" style={{ width: 80, height: 80, objectFit: 'contain', flexShrink: 0 }} />
+        <img src="/logo.png" alt="Success Compass" style={{ width: 90, height: 90, objectFit: 'contain', flexShrink: 0 }} />
       </div>
 
-      {/* Name + global score */}
-      <div style={{ padding: '16px 48px 0' }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: '#222' }}>
-          {firstName} {lastName}
-        </div>
-        <div style={{ marginTop: 6, display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <span style={{ fontSize: 13, color: '#777' }}>Score global :</span>
-          <span style={{ fontSize: 22, fontWeight: 900, color: NAVY }}>{total}</span>
-          <span style={{ fontSize: 13, color: '#999' }}>/ 90</span>
-          <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, background: NAVY, color: WHITE, padding: '2px 10px', borderRadius: 20 }}>
-            {globalLevel}
-          </span>
+      {/* Name */}
+      <div style={{ padding: '20px 56px 0' }}>
+        <div style={{ fontSize: 26, fontWeight: 700, color: '#222' }}>
+          {firstName} {lastName?.toUpperCase()}
         </div>
       </div>
 
-      <div style={{ margin: '14px 48px', height: 1, background: '#e5e7eb' }} />
+      <div style={{ margin: '32px 56px', height: 1, background: '#e5e7eb' }} />
 
-      {/* All 13 piliers — compact 2-column grid */}
-      <div style={{ padding: '0 48px', flex: 1 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 32px' }}>
-          {QS_PILIER_ORDER.map((pilier) => {
-            const info  = getPilierInfo(pilier)
-            const score = getPilierScore(pilier, answers)
-            const level = getQSLevel(score, info.maxScore)
-            const col   = colMap[level]
-            const lbl   = lblMap[level]
-            const pct   = Math.round((score / info.maxScore) * 100)
+      {/* Level */}
+      <div style={{ padding: '0 56px', textAlign: 'center', flex: 1 }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#333', marginBottom: 12 }}>
+          Niveau de QS :
+        </div>
+        <div style={{ fontSize: 48, fontWeight: 900, color: NAVY, marginBottom: 48 }}>
+          {content.level}
+        </div>
 
-            return (
-              <div key={pilier} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <div style={{ width: 3, borderRadius: 2, background: TEAL, alignSelf: 'stretch', flexShrink: 0 }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
-                    <span style={{ fontWeight: 700, fontSize: 11, color: NAVY }}>{info.label}</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 9.5, fontWeight: 700, color: col }}>{lbl}</span>
-                      <span style={{ fontSize: 10.5, fontWeight: 700, color: '#555' }}>{score}/{info.maxScore}</span>
-                    </div>
-                  </div>
-                  <div style={{ height: 5, background: '#f0f0f0', borderRadius: 3, overflow: 'hidden', marginBottom: 3 }}>
-                    <div style={{ height: '100%', width: `${pct}%`, background: col, borderRadius: 3 }} />
-                  </div>
-                  <div style={{ fontSize: 9.5, color: '#777', lineHeight: 1.45 }}>
-                    {info[level].summary}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+        {/* Description paragraphs */}
+        <div style={{ maxWidth: 560, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <p style={{ fontSize: 16, color: '#333', lineHeight: 1.9, margin: 0, textAlign: 'center' }}>
+            {content.para1}
+          </p>
+          <p style={{ fontSize: 16, color: '#333', lineHeight: 1.9, margin: 0, textAlign: 'center' }}>
+            {content.para2}
+          </p>
         </div>
       </div>
 
       {/* Footer */}
-      <div style={{ padding: '14px 48px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }}>
+      <div style={{ padding: '20px 56px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }}>
         <span style={{ fontSize: 10, color: '#bbb' }}>Success Compass Academy</span>
         <span style={{ fontSize: 10, color: '#bbb' }}>Test Quotient de Succès</span>
       </div>
@@ -136,97 +106,101 @@ function CoverPage({ firstName, lastName, answers }: Props) {
   )
 }
 
-// ── PILIER PAGE ────────────────────────────────────────────────────────────────
-function PilierPage({ pilier, index, answers, firstName, lastName }: {
-  pilier: QSPilier; index: number; answers: Record<number, number>
-  firstName: string; lastName: string
-}) {
-  const info    = getPilierInfo(pilier)
-  const score   = getPilierScore(pilier, answers)
-  const level   = getQSLevel(score, info.maxScore)
-  const content = info[level]
-  const col     = level === 'forte' ? '#22c55e' : level === 'moyenne' ? '#f59e0b' : '#ef4444'
-  const lbl     = level === 'forte' ? 'Compétence forte' : level === 'moyenne' ? 'Compétence moyenne' : 'Compétence à renforcer'
-  const pct     = Math.round((score / info.maxScore) * 100)
+// ── SHARED PAGE HEADER ─────────────────────────────────────────────────────────
+function PageHeader({ firstName, lastName }: { firstName: string; lastName: string }) {
+  return (
+    <div style={{ padding: '18px 56px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <img src="/logo.png" alt="SC" style={{ width: 42, height: 42, objectFit: 'contain' }} />
+        <div>
+          <div style={{ fontSize: 8, fontWeight: 400, color: '#aaa', letterSpacing: 3, textTransform: 'uppercase' }}>QUOTIENT DE SUCCÈS</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: NAVY }}>{firstName} {lastName?.toUpperCase()}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PageFooter() {
+  return (
+    <div style={{ padding: '16px 56px', borderTop: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between' }}>
+      <span style={{ fontSize: 10, color: '#bbb' }}>Success Compass Academy</span>
+      <span style={{ fontSize: 10, color: '#bbb' }}>Test Quotient de Succès</span>
+    </div>
+  )
+}
+
+// ── FORCES PAGES ──────────────────────────────────────────────────────────────
+function ForcesPage({ firstName, lastName, answers, slice }: Props & { slice: [number, number] }) {
+  const forces = getTop5Forces(answers).slice(slice[0], slice[1])
 
   return (
     <Page>
-      {/* Header */}
-      <div style={{ padding: '18px 48px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <img src="/logo.png" alt="SC" style={{ width: 42, height: 42, objectFit: 'contain' }} />
-          <div>
-            <div style={{ fontSize: 8, fontWeight: 400, color: '#aaa', letterSpacing: 3, textTransform: 'uppercase' }}>
-              QUOTIENT DE SUCCÈS
-            </div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: NAVY }}>{firstName} {lastName}</div>
-          </div>
+      <PageHeader firstName={firstName} lastName={lastName} />
+      <div style={{ padding: '28px 56px', flex: 1 }}>
+        <div style={{ fontSize: 26, fontWeight: 800, color: NAVY, marginBottom: 36 }}>
+          Vos 5 forces fondamentales
         </div>
-        <span style={{ fontSize: 10, color: '#bbb' }}>Pilier {index + 1} / {QS_PILIER_ORDER.length}</span>
-      </div>
-
-      <div style={{ padding: '22px 48px', flex: 1 }}>
-        {/* Pilier title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 18 }}>
-          <div style={{ width: 5, borderRadius: 2, background: TEAL, alignSelf: 'stretch', flexShrink: 0 }} />
-          <div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: NAVY }}>{info.label}</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: col }}>{lbl}</span>
-              <span style={{ fontSize: 12, color: '#777' }}>Score : {score} / {info.maxScore}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Score bar */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ height: 10, background: '#f0f0f0', borderRadius: 5, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${pct}%`, background: col, borderRadius: 5 }} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
-            <span style={{ fontSize: 10, color: '#ccc' }}>0</span>
-            <span style={{ fontSize: 10, color: '#ccc' }}>{info.maxScore}</span>
-          </div>
-        </div>
-
-        {/* Analyse */}
-        <div style={{
-          background: '#f8fafc', borderRadius: 10, padding: '18px 22px',
-          marginBottom: 24, borderLeft: `4px solid ${TEAL}`,
-        }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: TEAL, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10 }}>
-            Analyse
-          </div>
-          <div style={{ fontSize: 13, color: '#333', lineHeight: 1.8 }}>{content.description}</div>
-        </div>
-
-        {/* Plan d'action */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: NAVY, marginBottom: 14 }}>{content.planTitle}</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {content.plan.map((item, i) => (
-              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: TEAL, flexShrink: 0, minWidth: 20 }}>{i + 1}.</span>
-                <div style={{ fontSize: 13, color: '#444', lineHeight: 1.7, flex: 1 }}>{item}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+          {forces.map((pilier, i) => {
+            const info  = getPilierInfo(pilier)
+            const num   = slice[0] + i + 1
+            return (
+              <div key={pilier} style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                <div style={{ width: 4, borderRadius: 2, background: TEAL, alignSelf: 'stretch', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 8 }}>
+                    {num}. {info.forceTitle}
+                  </div>
+                  <div style={{ fontSize: 14, color: '#444', lineHeight: 1.8 }}>
+                    {info.forceDesc}
+                  </div>
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Exercice */}
-        <div style={{ background: NAVY, borderRadius: 10, padding: '18px 22px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: YELLOW, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10 }}>
-            Exercice recommandé
-          </div>
-          <div style={{ fontSize: 13, color: WHITE, lineHeight: 1.8 }}>{content.exercice}</div>
+            )
+          })}
         </div>
       </div>
+      <PageFooter />
+    </Page>
+  )
+}
 
-      {/* Footer */}
-      <div style={{ padding: '16px 48px', borderTop: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 10, color: '#bbb' }}>Success Compass Academy</span>
-        <span style={{ fontSize: 10, color: '#bbb' }}>{info.label}</span>
+// ── AXES PAGES ────────────────────────────────────────────────────────────────
+function AxesPage({ firstName, lastName, answers, slice }: Props & { slice: [number, number] }) {
+  const axes = getBottom5Axes(answers).slice(slice[0], slice[1])
+
+  return (
+    <Page>
+      <PageHeader firstName={firstName} lastName={lastName} />
+      <div style={{ padding: '28px 56px', flex: 1 }}>
+        <div style={{ fontSize: 26, fontWeight: 800, color: NAVY, marginBottom: 8 }}>
+          Axes d'amélioration
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 400, color: '#666', marginBottom: 36 }}>
+          pour aller encore plus loin
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+          {axes.map((pilier, i) => {
+            const info = getPilierInfo(pilier)
+            const num  = slice[0] + i + 1
+            return (
+              <div key={pilier} style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                <div style={{ width: 4, borderRadius: 2, background: YELLOW, alignSelf: 'stretch', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 8 }}>
+                    {num}. {info.axeTitle}
+                  </div>
+                  <div style={{ fontSize: 14, color: '#444', lineHeight: 1.8 }}>
+                    {info.axeDesc}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
       </div>
+      <PageFooter />
     </Page>
   )
 }
@@ -238,9 +212,10 @@ const QSReportTemplate = forwardRef<HTMLDivElement, Props>(function QSReportTemp
   return (
     <div ref={ref} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
       <CoverPage firstName={firstName} lastName={lastName} answers={answers} />
-      {QS_PILIER_ORDER.map((pilier, i) => (
-        <PilierPage key={pilier} pilier={pilier} index={i} answers={answers} firstName={firstName} lastName={lastName} />
-      ))}
+      <ForcesPage firstName={firstName} lastName={lastName} answers={answers} slice={[0, 3]} />
+      <ForcesPage firstName={firstName} lastName={lastName} answers={answers} slice={[3, 5]} />
+      <AxesPage   firstName={firstName} lastName={lastName} answers={answers} slice={[0, 3]} />
+      <AxesPage   firstName={firstName} lastName={lastName} answers={answers} slice={[3, 5]} />
     </div>
   )
 })
