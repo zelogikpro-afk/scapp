@@ -6,8 +6,6 @@ import {
   type QSPilier,
 } from '../../data/testQSQuestions'
 import QSReportTemplate, { PAGE_W, PAGE_H } from './QSReportTemplate'
-import html2canvas from 'html2canvas'
-import jsPDF from 'jspdf'
 
 type Step = 'intro' | 'info' | 'questions' | 'result'
 
@@ -71,28 +69,27 @@ export default function TestQSPage() {
     if (!reportRef.current) return
     setDL(true)
     try {
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2, useCORS: true, allowTaint: true,
-        backgroundColor: '#ffffff',
-      })
-      const pdf = new jsPDF({ unit: 'px', format: [PAGE_W, PAGE_H], orientation: 'portrait' })
-      const pages = Math.ceil(canvas.height / canvas.width * PAGE_W / PAGE_H)
-      const pageHeightPx = Math.round(canvas.width * PAGE_H / PAGE_W)
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ])
+      const container = reportRef.current
+      const pages = Array.from(container.children) as HTMLElement[]
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [PAGE_W, PAGE_H] })
 
-      for (let i = 0; i < pages; i++) {
-        if (i > 0) pdf.addPage()
-        const srcY  = i * pageHeightPx
-        const chunk = document.createElement('canvas')
-        chunk.width  = canvas.width
-        chunk.height = Math.min(pageHeightPx, canvas.height - srcY)
-        const ctx = chunk.getContext('2d')!
-        ctx.drawImage(canvas, 0, srcY, canvas.width, chunk.height, 0, 0, canvas.width, chunk.height)
-        pdf.addImage(chunk.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, PAGE_W, PAGE_H * (chunk.height / pageHeightPx))
+      for (let i = 0; i < pages.length; i++) {
+        const canvas = await html2canvas(pages[i], {
+          scale: 2, useCORS: true, allowTaint: true,
+          backgroundColor: '#ffffff', width: PAGE_W, height: PAGE_H,
+        })
+        if (i > 0) pdf.addPage([PAGE_W, PAGE_H], 'portrait')
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, PAGE_W, PAGE_H)
       }
       pdf.save(`TEST QS_${firstName} ${lastName.toUpperCase()}.pdf`)
-    } finally {
-      setDL(false)
+    } catch (err) {
+      console.error(err)
     }
+    setDL(false)
   }
 
   const colMap: Record<string, string> = { forte: '#22c55e', moyenne: '#f59e0b', faible: '#ef4444' }
