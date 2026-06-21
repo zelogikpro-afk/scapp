@@ -31,6 +31,14 @@ const TESTS = [
     path: '/test/qs',
     gradient: 'from-teal-500 to-blue-700',
   },
+  {
+    type: 'compass',
+    label: 'Test Compass',
+    subtitle: 'Découvrez votre profil de leadership parmi 10 archétypes',
+    icon: '🧭',
+    path: '/test/compass',
+    gradient: 'from-indigo-500 to-purple-700',
+  },
 ]
 
 export default function EspaceTests() {

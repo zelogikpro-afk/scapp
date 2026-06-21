@@ -25,6 +25,7 @@ import Purchases from './pages/purchases/Purchases'
 import TestMappingPage from './pages/test/TestMappingPage'
 import TestIEPage from './pages/test/TestIEPage'
 import TestQSPage from './pages/test/TestQSPage'
+import TestCompassPage from './pages/test/TestCompassPage'
 import Inscription from './pages/inscription/Inscription'
 import InscriptionPublique from './pages/inscription/InscriptionPublique'
 import ProspectsList from './pages/inscription/ProspectsList'
@@ -109,6 +110,7 @@ export default function App() {
         <Route path="/test/mapping" element={<TestMappingPage />} />
         <Route path="/test/ie" element={<TestIEPage />} />
         <Route path="/test/qs" element={<TestQSPage />} />
+        <Route path="/test/compass" element={<TestCompassPage />} />
         <Route path="/espace" element={<EspaceLogin />} />
         <Route path="/espace" element={<EspaceLayout />}>
           <Route path="accueil"          element={<EspaceAccueil />} />

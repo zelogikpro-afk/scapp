@@ -15,6 +15,7 @@ import { QUESTIONS as MAPPING_QUESTIONS } from '../../data/testMappingQuestions'
 import IEReportTemplate, { PAGE_W, PAGE_H } from '../test/IEReportTemplate'
 import QSReportTemplate from '../test/QSReportTemplate'
 import { QS_PILIER_ORDER, getPilierInfo, getPilierScore, getQSLevel, getTotalScore, getQSGlobalLevel } from '../../data/testQSQuestions'
+import { COMPASS_PROFILES, getAllScores, getDominantProfile, type CompassProfileKey } from '../../data/testCompassData'
 import type { TestType } from '../../types'
 import toast from 'react-hot-toast'
 import { supabase, supabaseAdmin } from '../../lib/supabase'
@@ -24,6 +25,7 @@ const SUPABASE_URL = 'https://twcqvpgpzayjxiwzzesb.supabase.co'
 const TEST_URL = `${window.location.origin}/test/mapping`
 const TEST_IE_URL = `${window.location.origin}/test/ie`
 const TEST_QS_URL = `${window.location.origin}/test/qs`
+const TEST_COMPASS_URL = `${window.location.origin}/test/compass`
 
 const TEST_TYPES: TestType[] = ['DISC', 'MBTI', 'Enneagram', 'Life Wheel', 'Values', 'Ikigai', 'Strengths', 'LifeBook']
 
@@ -491,7 +493,13 @@ export default function Tests() {
   const [qsSearch, setQSSearch] = useState('')
   const [refreshingQS, setRefreshingQS] = useState(false)
   const [qsSortOrder, setQSSortOrder] = useState<'desc' | 'asc'>('desc')
-  const [activeTab, setActiveTab] = useState<'mapping' | 'ie' | 'qs' | 'psycho'>('mapping')
+  const [compassResults, setCompassResults] = useState<any[]>([])
+  const [loadingCompass, setLoadingCompass] = useState(true)
+  const [compassSearch, setCompassSearch] = useState('')
+  const [refreshingCompass, setRefreshingCompass] = useState(false)
+  const [compassSortOrder, setCompassSortOrder] = useState<'desc' | 'asc'>('desc')
+  const [selectedCompass, setSelectedCompass] = useState<any | null>(null)
+  const [activeTab, setActiveTab] = useState<'mapping' | 'ie' | 'qs' | 'compass' | 'psycho'>('mapping')
   const [search, setSearch] = useState('')
   const [ieSearch, setIESearch] = useState('')
   const [profileFilter, setProfileFilter] = useState<ProfileKey | 'all'>('all')
@@ -552,6 +560,29 @@ export default function Tests() {
   }
 
   useEffect(() => { loadQSResults() }, [])
+
+  async function loadCompassResults(showSpinner = true) {
+    if (showSpinner) setLoadingCompass(true)
+    else setRefreshingCompass(true)
+    const { data } = await supabase
+      .from('test_results')
+      .select('*')
+      .eq('test_type', 'compass')
+      .order('created_at', { ascending: false })
+    setCompassResults(data || [])
+    setLoadingCompass(false)
+    setRefreshingCompass(false)
+  }
+
+  useEffect(() => { loadCompassResults() }, [])
+
+  async function deleteCompassResult(id: string) {
+    if (!confirm('Supprimer ce résultat Compass ?')) return
+    const { error } = await supabaseAdmin.from('test_results').delete().eq('id', id)
+    if (error) { toast.error('Erreur lors de la suppression'); return }
+    toast.success('Résultat supprimé')
+    setCompassResults(prev => prev.filter(r => r.id !== id))
+  }
 
   async function downloadIEPDF(r: IEResult) {
     if (!ieReportRef.current) return
@@ -709,6 +740,16 @@ export default function Tests() {
           }`}
         >
           🏆 Test QS {qsResults.length > 0 && <span className="ml-1 text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full">{qsResults.length}</span>}
+        </button>
+        <button
+          onClick={() => { setActiveTab('compass'); loadCompassResults(false) }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === 'compass'
+              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          🧭 Test Compass {compassResults.length > 0 && <span className="ml-1 text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full">{compassResults.length}</span>}
         </button>
         <button
           onClick={() => setActiveTab('psycho')}
@@ -1103,6 +1144,158 @@ export default function Tests() {
           )}
         </div>
       )}
+
+      {/* TAB: COMPASS */}
+      {activeTab === 'compass' && (
+        <div className="space-y-4">
+          {/* Lien passation */}
+          <div className="flex items-center gap-3 p-4 bg-purple-50 dark:bg-purple-900/10 rounded-xl border border-purple-100 dark:border-purple-800">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">Lien de passation — Test Compass</p>
+              <p className="text-xs text-gray-400 truncate mt-0.5">{TEST_COMPASS_URL}</p>
+            </div>
+            <button onClick={() => { navigator.clipboard.writeText(TEST_COMPASS_URL); toast.success('Lien copié !') }}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-colors flex-shrink-0">
+              <Copy className="w-3.5 h-3.5" /> Copier
+            </button>
+            <a href={TEST_COMPASS_URL} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors flex-shrink-0">
+              <ExternalLink className="w-3.5 h-3.5" /> Ouvrir
+            </a>
+          </div>
+
+          {loadingCompass ? (
+            <div className="text-center py-12 text-gray-400">Chargement…</div>
+          ) : compassResults.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <p className="font-medium">Aucun résultat Compass pour le moment</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input value={compassSearch} onChange={e => setCompassSearch(e.target.value)} placeholder="Rechercher par nom…"
+                    className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                </div>
+                <button onClick={() => setCompassSortOrder(o => o === 'desc' ? 'asc' : 'desc')}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                  {compassSortOrder === 'desc' ? '↓ Plus récent' : '↑ Plus ancien'}
+                </button>
+                <button onClick={() => loadCompassResults(false)} disabled={refreshingCompass}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50">
+                  <RefreshCw className={`w-3.5 h-3.5 ${refreshingCompass ? 'animate-spin' : ''}`} /> Actualiser
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {compassResults
+                  .filter(r => `${r.first_name} ${r.last_name}`.toLowerCase().includes(compassSearch.toLowerCase()))
+                  .sort((a, b) => {
+                    const da = new Date(a.created_at).getTime()
+                    const db = new Date(b.created_at).getTime()
+                    return compassSortOrder === 'desc' ? db - da : da - db
+                  })
+                  .map(r => {
+                    const domKey = (r.dominant_profile || getDominantProfile(r.answers || {})) as CompassProfileKey
+                    const prof = COMPASS_PROFILES[domKey] || COMPASS_PROFILES['orange']
+                    return (
+                      <Card key={r.id} className="border border-gray-100 dark:border-gray-700 hover:border-purple-200 transition-colors cursor-pointer"
+                        onClick={() => setSelectedCompass(r)}>
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                            style={{ background: prof.color }}>
+                            {r.first_name?.[0]}{r.last_name?.[0]}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
+                                {r.first_name} {r.last_name?.toUpperCase()}
+                              </span>
+                              <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: prof.bgColor, color: prof.color }}>
+                                {prof.label} — {prof.name}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 mt-1">
+                              {r.email && <span className="text-xs text-gray-400">{r.email}</span>}
+                              <span className="text-xs text-gray-300">·</span>
+                              <span className="text-xs text-gray-400">{formatDate(r.created_at)}</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={e => { e.stopPropagation(); deleteCompassResult(r.id) }}
+                            className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                            title="Supprimer">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </Card>
+                    )
+                  })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Modal détail Compass */}
+      {selectedCompass && (() => {
+        const domKey = (selectedCompass.dominant_profile || getDominantProfile(selectedCompass.answers || {})) as CompassProfileKey
+        const prof = COMPASS_PROFILES[domKey] || COMPASS_PROFILES['orange']
+        const scores = selectedCompass.scores || getAllScores(selectedCompass.answers || {})
+        const sorted = Object.entries(scores).sort(([, a], [, b]) => (b as number) - (a as number)) as [CompassProfileKey, number][]
+        return (
+          <Modal open onClose={() => setSelectedCompass(null)} title={`${selectedCompass.first_name} ${selectedCompass.last_name} — Test Compass`} size="lg">
+            <div className="space-y-5">
+              {/* Profile */}
+              <div className="rounded-xl p-5 text-center" style={{ background: prof.bgColor, border: `2px solid ${prof.color}` }}>
+                <div className="inline-block px-3 py-1 rounded-full text-xs font-bold text-white mb-2" style={{ background: prof.color }}>{prof.label}</div>
+                <div className="text-xl font-black" style={{ color: '#1D3461' }}>{prof.name}</div>
+                <p className="text-sm text-gray-600 mt-2">{prof.traits}</p>
+              </div>
+              {/* Points forts / Dev */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-green-50 rounded-xl p-4">
+                  <p className="text-xs font-bold text-green-700 mb-2">✦ Points forts</p>
+                  <p className="text-sm text-gray-700">{prof.pointsForts}</p>
+                </div>
+                <div className="bg-amber-50 rounded-xl p-4">
+                  <p className="text-xs font-bold text-amber-700 mb-2">▲ Zones de développement</p>
+                  <p className="text-sm text-gray-700">{prof.zonesDev}</p>
+                </div>
+              </div>
+              {/* All scores */}
+              <div>
+                <p className="text-sm font-bold text-gray-700 mb-3">Scores par profil</p>
+                {sorted.map(([pk, sc]) => {
+                  const p = COMPASS_PROFILES[pk as CompassProfileKey]
+                  if (!p) return null
+                  const maxSc = sorted[0][1] as number
+                  const barPct = maxSc > 0 ? Math.round((sc as number / maxSc) * 100) : 0
+                  return (
+                    <div key={pk} className="mb-2">
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="font-medium" style={{ color: pk === domKey ? p.color : '#555' }}>{p.label} — {p.name}</span>
+                        <span className="font-bold" style={{ color: p.color }}>{sc} pts</span>
+                      </div>
+                      <div className="h-2 bg-gray-100 rounded-full">
+                        <div className="h-full rounded-full" style={{ width: `${barPct}%`, background: p.color }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              {/* PDF download */}
+              <a href={`/pdfs/compass/${encodeURIComponent(prof.pdfFile)}`}
+                download={`TEST COMPASS_${selectedCompass.first_name} ${selectedCompass.last_name?.toUpperCase()}.pdf`}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-white text-sm"
+                style={{ background: '#1D3461' }}>
+                <Download className="w-4 h-4" /> Télécharger le rapport PDF
+              </a>
+            </div>
+          </Modal>
+        )
+      })()}
 
       {/* TAB: PSYCHO */}
       {activeTab === 'psycho' && (
