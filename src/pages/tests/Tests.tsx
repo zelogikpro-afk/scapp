@@ -490,6 +490,7 @@ export default function Tests() {
   const [loadingQS, setLoadingQS] = useState(true)
   const [qsSearch, setQSSearch] = useState('')
   const [refreshingQS, setRefreshingQS] = useState(false)
+  const [qsSortOrder, setQSSortOrder] = useState<'desc' | 'asc'>('desc')
   const [activeTab, setActiveTab] = useState<'mapping' | 'ie' | 'qs' | 'psycho'>('mapping')
   const [search, setSearch] = useState('')
   const [ieSearch, setIESearch] = useState('')
@@ -576,6 +577,14 @@ export default function Tests() {
       toast.error('Erreur lors de la génération du PDF')
     }
     setDownloadingIE(false)
+  }
+
+  async function deleteQSResult(id: string) {
+    if (!confirm('Supprimer ce résultat QS ?')) return
+    const { error } = await supabaseAdmin.from('test_results').delete().eq('id', id)
+    if (error) { toast.error('Erreur lors de la suppression'); return }
+    toast.success('Résultat supprimé')
+    setQSResults(prev => prev.filter(r => r.id !== id))
   }
 
   async function downloadQSPDF(r: any) {
@@ -1026,6 +1035,10 @@ export default function Tests() {
                   <input value={qsSearch} onChange={e => setQSSearch(e.target.value)} placeholder="Rechercher par nom…"
                     className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                 </div>
+                <button onClick={() => setQSSortOrder(o => o === 'desc' ? 'asc' : 'desc')}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                  {qsSortOrder === 'desc' ? '↓ Plus récent' : '↑ Plus ancien'}
+                </button>
                 <button onClick={() => loadQSResults(false)} disabled={refreshingQS}
                   className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50">
                   <RefreshCw className={`w-3.5 h-3.5 ${refreshingQS ? 'animate-spin' : ''}`} /> Actualiser
@@ -1035,6 +1048,11 @@ export default function Tests() {
               <div className="space-y-3">
                 {qsResults
                   .filter(r => `${r.first_name} ${r.last_name}`.toLowerCase().includes(qsSearch.toLowerCase()))
+                  .sort((a, b) => {
+                    const da = new Date(a.created_at).getTime()
+                    const db = new Date(b.created_at).getTime()
+                    return qsSortOrder === 'desc' ? db - da : da - db
+                  })
                   .map(r => {
                     const answers = r.answers || {}
                     const total = getTotalScore(answers)
@@ -1046,6 +1064,7 @@ export default function Tests() {
                             {r.first_name?.[0]}{r.last_name?.[0]}
                           </div>
                           <div className="flex-1 min-w-0">
+
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
                                 {r.first_name} {r.last_name?.toUpperCase()}
@@ -1069,6 +1088,12 @@ export default function Tests() {
                               <span className="text-xs font-bold text-teal-600">{pct}%</span>
                             </div>
                           </div>
+                          <button
+                            onClick={e => { e.stopPropagation(); deleteQSResult(r.id) }}
+                            className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                            title="Supprimer">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </Card>
                     )
