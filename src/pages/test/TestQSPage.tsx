@@ -255,8 +255,7 @@ export default function TestQSPage() {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-            <span style={{ fontSize: 48, fontWeight: 900 }}>{totalScore}</span>
-            <span style={{ fontSize: 18, opacity: 0.6 }}>/ 90</span>
+            <span style={{ fontSize: 48, fontWeight: 900 }}>{Math.round((totalScore / 90) * 100)}%</span>
             <span style={{ marginLeft: 12, fontSize: 13, fontWeight: 700, background: TEAL, padding: '4px 14px', borderRadius: 20 }}>{globalLevel}</span>
           </div>
         </div>
@@ -279,7 +278,7 @@ export default function TestQSPage() {
                       <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{info.label}</span>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: col }}>{lblMap[level]}</span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#555' }}>{score}/{info.maxScore}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#555' }}>{pct}%</span>
                       </div>
                     </div>
                     <div style={{ height: 7, background: '#f0f0f0', borderRadius: 4, overflow: 'hidden' }}>
