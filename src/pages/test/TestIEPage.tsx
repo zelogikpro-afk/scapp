@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import {
   IE_QUESTIONS, IE_DIMENSIONS, SECTION_ORDER, getIELevel, getLevelLabel, getLevelColor,
@@ -22,7 +22,19 @@ export default function TestIEPage() {
   const [saving, setSaving] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [scores, setScores] = useState<Record<IEDimension, number>>({} as any)
+  const [fromSession, setFromSession] = useState(false)
   const reportRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('sc_learner_session')
+      if (!raw) return
+      const s = JSON.parse(raw)
+      const parts = (s.participantName || '').trim().split(' ')
+      setInfo({ firstName: parts[0] || '', lastName: parts.slice(1).join(' ') || '', email: s.email || '', phone: s.phone || '' })
+      setFromSession(true)
+    } catch { /* ignore */ }
+  }, [])
 
   const totalAnswered = Object.keys(answers).length
 
@@ -36,23 +48,23 @@ export default function TestIEPage() {
     if (totalAnswered < 20) return
     setSaving(true)
     const computed = calcScores()
+    try {
+      await supabase.from('test_results').insert({
+        first_name: info.firstName,
+        last_name: info.lastName,
+        email: info.email,
+        phone: info.phone,
+        test_type: 'ie',
+        profile_key: null,
+        dominant_profile: null,
+        profile_name: null,
+        scores: computed,
+        answers,
+      })
+    } catch (err) {
+      console.error('IE insert error:', err)
+    }
     setScores(computed)
-
-    const { error } = await supabase.from('test_results').insert({
-      first_name: info.firstName,
-      last_name: info.lastName,
-      email: info.email,
-      phone: info.phone,
-      test_type: 'ie',
-      profile_key: null,
-      dominant_profile: null,
-      profile_name: null,
-      scores: computed,
-      answers,
-    })
-
-    if (error) console.error('IE insert error:', error)
-
     setSaving(false)
     setStep('result')
     window.scrollTo(0, 0)
@@ -122,7 +134,7 @@ export default function TestIEPage() {
               </p>
             </div>
             <button
-              onClick={() => setStep('info')}
+              onClick={() => setStep(fromSession ? 'questions' : 'info')}
               className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all duration-200"
             >
               Commencer le test
@@ -270,7 +282,7 @@ export default function TestIEPage() {
         </div>
 
         {/* Score overview card */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-6 shadow-sm">
+        {!fromSession && <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-6 shadow-sm">
           <h2 className="text-gray-900 font-bold text-lg mb-5">Vue d'ensemble</h2>
           <div className="space-y-4">
             {SECTION_ORDER.map(dim => {
@@ -300,10 +312,10 @@ export default function TestIEPage() {
               )
             })}
           </div>
-        </div>
+        </div>}
 
         {/* Per dimension detail */}
-        <div className="space-y-5 mb-8">
+        {!fromSession && <div className="space-y-5 mb-8">
           {SECTION_ORDER.map((dim, i) => {
             const dimInfo = getDimInfo(dim)
             const score = scores[dim] ?? 0
@@ -371,7 +383,7 @@ export default function TestIEPage() {
               </div>
             )
           })}
-        </div>
+        </div>}
 
         {/* Download button */}
         <div className="text-center mb-10">
