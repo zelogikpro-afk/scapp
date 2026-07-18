@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, ClipboardList, X, Trash2, Link, Copy, ExternalLink, Download, ChevronDown, ChevronUp, Eye, Mail, Phone, Calendar, Search, ArrowUpDown, RefreshCw } from 'lucide-react'
+import { Plus, ClipboardList, X, Trash2, Link, Copy, ExternalLink, Download, ChevronDown, ChevronUp, Eye, Mail, Phone, Calendar, Search, ArrowUpDown, RefreshCw, CheckCircle2, XCircle } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -16,7 +16,11 @@ import IEReportTemplate, { PAGE_W, PAGE_H } from '../test/IEReportTemplate'
 import QSReportTemplate from '../test/QSReportTemplate'
 import { QS_PILIER_ORDER, getPilierInfo, getPilierScore, getQSLevel, getTotalScore, getQSGlobalLevel } from '../../data/testQSQuestions'
 import { COMPASS_PROFILES, getAllScores, getDominantProfile, type CompassProfileKey } from '../../data/testCompassData'
-import { QUIZ_QUESTIONS } from '../../data/quizCoachData'
+import { QUIZ_QUESTIONS, QUIZ_THEMES } from '../../data/quizCoachData'
+import { QUIZ_N2_QUESTIONS, QUIZ_N2_THEMES } from '../../data/quizCoachN2Data'
+import { QUIZ_QUESTIONS as QUIZ_DP_QUESTIONS, QUIZ_THEMES as QUIZ_DP_THEMES } from '../../data/quizDevPersData'
+import { VALEURS, VALEURS_QUESTIONS, getAllValeurScores, type ValeurKey } from '../../data/testValeursData'
+import ValeursReportTemplate, { PAGE_W as VALEURS_PAGE_W, PAGE_H as VALEURS_PAGE_H, getProfileText } from '../test/ValeursReportTemplate'
 import type { TestType } from '../../types'
 import toast from 'react-hot-toast'
 import { supabase, supabaseAdmin } from '../../lib/supabase'
@@ -28,6 +32,9 @@ const TEST_IE_URL = `${window.location.origin}/test/ie`
 const TEST_QS_URL = `${window.location.origin}/test/qs`
 const TEST_COMPASS_URL = `${window.location.origin}/test/compass`
 const TEST_QUIZ_COACH_URL = `${window.location.origin}/test/quiz-coach`
+const TEST_QUIZ_COACH_N2_URL = `${window.location.origin}/test/quiz-coach-n2`
+const TEST_QUIZ_DP_URL = `${window.location.origin}/test/quiz-dev-pers`
+const TEST_VALEURS_URL = `${window.location.origin}/test/valeurs`
 
 const TEST_TYPES: TestType[] = ['DISC', 'MBTI', 'Enneagram', 'Life Wheel', 'Values', 'Ikigai', 'Strengths', 'LifeBook']
 
@@ -425,7 +432,7 @@ function MappingDetailModal({ r, onClose, onDownload }: { r: MappingResult; onCl
   )
 }
 
-function MappingResultRow({ r, onDownload }: { r: MappingResult; onDownload: (r: MappingResult) => void }) {
+function MappingResultRow({ r, onDownload, onDelete }: { r: MappingResult; onDownload: (r: MappingResult) => void; onDelete: (id: string) => void }) {
   const [showDetail, setShowDetail] = useState(false)
   const profile = r.dominant_profile
   const colorClass = PROFILE_COLOR[profile] || 'bg-gray-50 text-gray-700 border-gray-200'
@@ -474,6 +481,13 @@ function MappingResultRow({ r, onDownload }: { r: MappingResult; onDownload: (r:
           >
             <Eye className="w-4 h-4" />
           </button>
+          <button
+            onClick={() => onDelete(r.id)}
+            className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-300 hover:text-red-500 transition-colors"
+            title="Supprimer cette passation"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
         </div>
       </div>
       {showDetail && (
@@ -507,7 +521,27 @@ export default function Tests() {
   const [quizSortOrder, setQuizSortOrder] = useState<'desc' | 'asc'>('desc')
   const [selectedQuiz, setSelectedQuiz] = useState<any | null>(null)
   const [refreshingQuiz, setRefreshingQuiz] = useState(false)
-  const [activeTab, setActiveTab] = useState<'mapping' | 'ie' | 'qs' | 'compass' | 'quiz_coach' | 'psycho'>('mapping')
+  const [quizN2Results, setQuizN2Results] = useState<any[]>([])
+  const [loadingQuizN2, setLoadingQuizN2] = useState(true)
+  const [quizN2Search, setQuizN2Search] = useState('')
+  const [quizN2SortOrder, setQuizN2SortOrder] = useState<'desc' | 'asc'>('desc')
+  const [selectedQuizN2, setSelectedQuizN2] = useState<any | null>(null)
+  const [refreshingQuizN2, setRefreshingQuizN2] = useState(false)
+  const [valeursResults, setValeursResults] = useState<any[]>([])
+  const [loadingValeurs, setLoadingValeurs] = useState(true)
+  const [valeursSearch, setValeursSearch] = useState('')
+  const [valeursSortOrder, setValeursSortOrder] = useState<'desc' | 'asc'>('desc')
+  const [selectedValeurs, setSelectedValeurs] = useState<any | null>(null)
+  const [refreshingValeurs, setRefreshingValeurs] = useState(false)
+  const [downloadingValeurs, setDownloadingValeurs] = useState(false)
+  const valeursReportRef = useRef<HTMLDivElement>(null)
+  const [quizDpResults, setQuizDpResults] = useState<any[]>([])
+  const [loadingQuizDp, setLoadingQuizDp] = useState(true)
+  const [quizDpSearch, setQuizDpSearch] = useState('')
+  const [quizDpSortOrder, setQuizDpSortOrder] = useState<'desc' | 'asc'>('desc')
+  const [refreshingQuizDp, setRefreshingQuizDp] = useState(false)
+  const [selectedQuizDp, setSelectedQuizDp] = useState<any | null>(null)
+  const [activeTab, setActiveTab] = useState<'mapping' | 'ie' | 'qs' | 'compass' | 'quiz_coach' | 'quiz_coach_n2' | 'quiz_dev_pers' | 'valeurs' | 'psycho'>('mapping')
   const [search, setSearch] = useState('')
   const [ieSearch, setIESearch] = useState('')
   const [profileFilter, setProfileFilter] = useState<ProfileKey | 'all'>('all')
@@ -515,14 +549,133 @@ export default function Tests() {
   const [ieSortOrder, setIESortOrder] = useState<'desc' | 'asc'>('desc')
   const [selectedIE, setSelectedIE] = useState<IEResult | null>(null)
   const [selectedQS, setSelectedQS] = useState<any | null>(null)
+  const [ieDirectDownload, setIEDirectDownload] = useState<IEResult | null>(null)
+  const [qsDirectDownload, setQsDirectDownload] = useState<any | null>(null)
+  const [valeursDirectDownload, setValeursDirectDownload] = useState<any | null>(null)
+  const [downloadingValeursRow, setDownloadingValeursRow] = useState<string | null>(null)
+  const valeursDirectRef = useRef<HTMLDivElement>(null)
+  const [downloadingCompassRow, setDownloadingCompassRow] = useState<string | null>(null)
   const [refreshingIE, setRefreshingIE] = useState(false)
   const [refreshingMapping, setRefreshingMapping] = useState(false)
   const [downloadingIE, setDownloadingIE] = useState(false)
   const [downloadingQS, setDownloadingQS] = useState(false)
+  const [downloadingIERow, setDownloadingIERow] = useState<string | null>(null)
+  const [downloadingQSRow, setDownloadingQSRow] = useState<string | null>(null)
   const ieReportRef = useRef<HTMLDivElement>(null)
+  const ieDirectRef = useRef<HTMLDivElement>(null)
   const qsReportRef = useRef<HTMLDivElement>(null)
+  const qsDirectRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { fetchTests() }, [])
+
+  useEffect(() => {
+    if (!ieDirectDownload) return
+    const timer = setTimeout(async () => {
+      if (!ieDirectRef.current) return
+      setDownloadingIERow(ieDirectDownload.id)
+      try {
+        const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+          import('html2canvas'),
+          import('jspdf'),
+        ])
+        const pages = Array.from(ieDirectRef.current.children) as HTMLElement[]
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [PAGE_W, PAGE_H] })
+        for (let i = 0; i < pages.length; i++) {
+          const canvas = await html2canvas(pages[i], {
+            scale: 2, useCORS: true, allowTaint: true,
+            backgroundColor: '#ffffff', width: PAGE_W, height: PAGE_H,
+          })
+          if (i > 0) pdf.addPage([PAGE_W, PAGE_H], 'portrait')
+          pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, PAGE_W, PAGE_H)
+        }
+        pdf.save(`Test IE - ${ieDirectDownload.first_name} ${ieDirectDownload.last_name}.pdf`)
+      } catch {
+        toast.error('Erreur lors de la génération du PDF')
+      }
+      setDownloadingIERow(null)
+      setIEDirectDownload(null)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [ieDirectDownload])
+
+  useEffect(() => {
+    if (!qsDirectDownload) return
+    const timer = setTimeout(async () => {
+      if (!qsDirectRef.current) return
+      setDownloadingQSRow(qsDirectDownload.id)
+      try {
+        const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+          import('html2canvas'),
+          import('jspdf'),
+        ])
+        const pages = Array.from(qsDirectRef.current.children) as HTMLElement[]
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [PAGE_W, PAGE_H] })
+        for (let i = 0; i < pages.length; i++) {
+          const canvas = await html2canvas(pages[i], {
+            scale: 2, useCORS: true, allowTaint: true,
+            backgroundColor: '#ffffff', width: PAGE_W, height: PAGE_H,
+          })
+          if (i > 0) pdf.addPage([PAGE_W, PAGE_H], 'portrait')
+          pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, PAGE_W, PAGE_H)
+        }
+        pdf.save(`TEST QS_${qsDirectDownload.first_name} ${(qsDirectDownload.last_name || '').toUpperCase()}.pdf`)
+      } catch {
+        toast.error('Erreur lors de la génération du PDF QS')
+      }
+      setDownloadingQSRow(null)
+      setQsDirectDownload(null)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [qsDirectDownload])
+
+  useEffect(() => {
+    if (!valeursDirectDownload) return
+    const timer = setTimeout(async () => {
+      if (!valeursDirectRef.current) return
+      setDownloadingValeursRow(valeursDirectDownload.id)
+      try {
+        const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+          import('html2canvas'), import('jspdf'),
+        ])
+        const pages = Array.from(valeursDirectRef.current.children) as HTMLElement[]
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [VALEURS_PAGE_W, VALEURS_PAGE_H] })
+        for (let i = 0; i < pages.length; i++) {
+          const canvas = await html2canvas(pages[i], {
+            scale: 2, useCORS: true, allowTaint: true,
+            backgroundColor: '#ffffff', width: VALEURS_PAGE_W, height: VALEURS_PAGE_H,
+          })
+          if (i > 0) pdf.addPage([VALEURS_PAGE_W, VALEURS_PAGE_H], 'portrait')
+          pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, VALEURS_PAGE_W, VALEURS_PAGE_H)
+        }
+        pdf.save(`Test Valeurs - ${valeursDirectDownload.first_name} ${valeursDirectDownload.last_name}.pdf`)
+      } catch {
+        toast.error('Erreur lors de la génération du PDF Valeurs')
+      }
+      setDownloadingValeursRow(null)
+      setValeursDirectDownload(null)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [valeursDirectDownload])
+
+  async function downloadCompassRowPDF(r: any) {
+    const domKey = (r.dominant_profile || getDominantProfile(r.answers || {})) as CompassProfileKey
+    const prof = COMPASS_PROFILES[domKey]
+    if (!prof?.pdfFile) { toast.error('PDF non disponible pour ce profil'); return }
+    setDownloadingCompassRow(r.id)
+    try {
+      const res = await fetch(`/pdfs/compass/${encodeURIComponent(prof.pdfFile)}`)
+      if (!res.ok) throw new Error('fetch failed')
+      const blob = await res.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = prof.pdfFile
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch {
+      toast.error('PDF introuvable pour ce profil')
+    }
+    setDownloadingCompassRow(null)
+  }
 
   async function loadMappingResults(showSpinner = true) {
     if (showSpinner) setLoadingMapping(true)
@@ -607,6 +760,75 @@ export default function Tests() {
 
   useEffect(() => { loadQuizResults() }, [])
 
+  async function loadQuizN2Results(showSpinner = true) {
+    if (showSpinner) setLoadingQuizN2(true)
+    else setRefreshingQuizN2(true)
+    const { data } = await supabase
+      .from('test_results')
+      .select('*')
+      .eq('test_type', 'quiz_coach_n2')
+      .order('created_at', { ascending: false })
+    setQuizN2Results(data || [])
+    setLoadingQuizN2(false)
+    setRefreshingQuizN2(false)
+  }
+
+  useEffect(() => { loadQuizN2Results() }, [])
+
+  async function loadQuizDpResults(showSpinner = true) {
+    if (showSpinner) setLoadingQuizDp(true)
+    else setRefreshingQuizDp(true)
+    const { data } = await supabase
+      .from('test_results')
+      .select('*')
+      .eq('test_type', 'quiz_dev_pers')
+      .order('created_at', { ascending: false })
+    setQuizDpResults(data || [])
+    setLoadingQuizDp(false)
+    setRefreshingQuizDp(false)
+  }
+
+  useEffect(() => { loadQuizDpResults() }, [])
+
+  async function deleteQuizDpResult(id: string) {
+    if (!confirm('Supprimer ce résultat Quiz Développement Personnel ?')) return
+    const { error } = await supabaseAdmin.from('test_results').delete().eq('id', id)
+    if (error) { toast.error('Erreur lors de la suppression'); return }
+    toast.success('Résultat supprimé')
+    setQuizDpResults(prev => prev.filter(r => r.id !== id))
+  }
+
+  async function deleteQuizN2Result(id: string) {
+    if (!confirm('Supprimer ce résultat Quiz N2 ?')) return
+    const { error } = await supabaseAdmin.from('test_results').delete().eq('id', id)
+    if (error) { toast.error('Erreur lors de la suppression'); return }
+    toast.success('Résultat supprimé')
+    setQuizN2Results(prev => prev.filter(r => r.id !== id))
+  }
+
+  async function loadValeursResults(showSpinner = true) {
+    if (showSpinner) setLoadingValeurs(true)
+    else setRefreshingValeurs(true)
+    const { data } = await supabase
+      .from('test_results')
+      .select('*')
+      .eq('test_type', 'valeurs')
+      .order('created_at', { ascending: false })
+    setValeursResults(data || [])
+    setLoadingValeurs(false)
+    setRefreshingValeurs(false)
+  }
+
+  useEffect(() => { loadValeursResults() }, [])
+
+  async function deleteValeursResult(id: string) {
+    if (!confirm('Supprimer ce résultat Test des Valeurs ?')) return
+    const { error } = await supabaseAdmin.from('test_results').delete().eq('id', id)
+    if (error) { toast.error('Erreur lors de la suppression'); return }
+    toast.success('Résultat supprimé')
+    setValeursResults(prev => prev.filter(r => r.id !== id))
+  }
+
   async function deleteQuizResult(id: string) {
     if (!confirm('Supprimer ce résultat Quiz ?')) return
     const { error } = await supabaseAdmin.from('test_results').delete().eq('id', id)
@@ -641,6 +863,22 @@ export default function Tests() {
     setDownloadingIE(false)
   }
 
+  async function deleteIEResult(id: string) {
+    if (!confirm('Supprimer ce résultat IE ?')) return
+    const { error } = await supabaseAdmin.from('test_results').delete().eq('id', id)
+    if (error) { toast.error('Erreur lors de la suppression'); return }
+    toast.success('Résultat supprimé')
+    setIEResults(prev => prev.filter(r => r.id !== id))
+  }
+
+  async function deleteMappingResult(id: string) {
+    if (!confirm('Supprimer ce résultat Mapping ?')) return
+    const { error } = await supabaseAdmin.from('test_results').delete().eq('id', id)
+    if (error) { toast.error('Erreur lors de la suppression'); return }
+    toast.success('Résultat supprimé')
+    setMappingResults(prev => prev.filter(r => r.id !== id))
+  }
+
   async function deleteQSResult(id: string) {
     if (!confirm('Supprimer ce résultat QS ?')) return
     const { error } = await supabaseAdmin.from('test_results').delete().eq('id', id)
@@ -650,7 +888,10 @@ export default function Tests() {
   }
 
   async function downloadQSPDF(r: any) {
-    if (!qsReportRef.current) return
+    if (!qsReportRef.current) {
+      toast.error('Template non prêt, réessayez dans un instant')
+      return
+    }
     setDownloadingQS(true)
     try {
       const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
@@ -790,7 +1031,37 @@ export default function Tests() {
               : 'text-gray-500 hover:text-gray-700'
           }`}
         >
-          📝 Quiz Final {quizResults.length > 0 && <span className="ml-1 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{quizResults.length}</span>}
+          📝 Quiz Final N1 {quizResults.length > 0 && <span className="ml-1 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{quizResults.length}</span>}
+        </button>
+        <button
+          onClick={() => { setActiveTab('quiz_coach_n2'); loadQuizN2Results(false) }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === 'quiz_coach_n2'
+              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          📋 Quiz Final N2 {quizN2Results.length > 0 && <span className="ml-1 text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full">{quizN2Results.length}</span>}
+        </button>
+        <button
+          onClick={() => { setActiveTab('quiz_dev_pers'); loadQuizDpResults(false) }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === 'quiz_dev_pers'
+              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          🌱 Quiz Dév. Personnel {quizDpResults.length > 0 && <span className="ml-1 text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">{quizDpResults.length}</span>}
+        </button>
+        <button
+          onClick={() => { setActiveTab('valeurs'); loadValeursResults(false) }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === 'valeurs'
+              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          💎 Test des Valeurs {valeursResults.length > 0 && <span className="ml-1 text-xs bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full">{valeursResults.length}</span>}
         </button>
         <button
           onClick={() => setActiveTab('psycho')}
@@ -925,7 +1196,7 @@ export default function Tests() {
               </Card>
             ) : (
               filteredResults.map(r => (
-                <MappingResultRow key={r.id} r={r} onDownload={downloadPDF} />
+                <MappingResultRow key={r.id} r={r} onDownload={downloadPDF} onDelete={deleteMappingResult} />
               ))
             )}
           </div>
@@ -1023,43 +1294,62 @@ export default function Tests() {
                 const scores = r.scores || {}
                 const total = IE_SECTION_ORDER.reduce((a, d) => a + (scores[d] || 0), 0)
                 return (
-                  <div key={r.id} onClick={() => setSelectedIE(r)} className="flex items-center gap-4 p-4 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl hover:border-yellow-200 dark:hover:border-yellow-800 hover:shadow-sm transition-all cursor-pointer">
-                    <div className="w-10 h-10 rounded-xl bg-yellow-50 dark:bg-yellow-900/20 flex items-center justify-center text-xl flex-shrink-0">
-                      💡
+                  <div key={r.id} className="flex items-center gap-4 p-4 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl hover:border-yellow-200 dark:hover:border-yellow-800 hover:shadow-sm transition-all">
+                    <div onClick={() => setSelectedIE(r)} className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer">
+                      <div className="w-10 h-10 rounded-xl bg-yellow-50 dark:bg-yellow-900/20 flex items-center justify-center text-xl flex-shrink-0">
+                        💡
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+                            {r.first_name} {r.last_name}
+                          </p>
+                          <span className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded-full font-medium">
+                            Score global : {total}/80
+                          </span>
+                          <span className="flex items-center gap-1 text-xs bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 px-2 py-0.5 rounded-full font-medium">
+                            <Calendar className="w-3 h-3" />
+                            {new Date(r.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            {' '}
+                            {new Date(r.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {IE_SECTION_ORDER.map(d => {
+                            const dimInfo = getDimInfo(d)
+                            const score = scores[d] || 0
+                            const level = getIELevel(score)
+                            const color = getLevelColor(level)
+                            return (
+                              <span key={d} className="text-xs px-2 py-0.5 rounded-full border font-medium" style={{ backgroundColor: color + '15', color, borderColor: color + '40' }}>
+                                {dimInfo.label.split(' ')[0]} : {score}/16
+                              </span>
+                            )
+                          })}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                          {r.email && <span className="text-xs text-gray-400">{r.email}</span>}
+                          {r.phone && <span className="text-xs text-gray-400">{r.phone}</span>}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">
-                          {r.first_name} {r.last_name}
-                        </p>
-                        <span className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded-full font-medium">
-                          Score global : {total}/80
-                        </span>
-                        <span className="flex items-center gap-1 text-xs bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 px-2 py-0.5 rounded-full font-medium">
-                          <Calendar className="w-3 h-3" />
-                          {new Date(r.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          {' '}
-                          {new Date(r.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {IE_SECTION_ORDER.map(d => {
-                          const dimInfo = getDimInfo(d)
-                          const score = scores[d] || 0
-                          const level = getIELevel(score)
-                          const color = getLevelColor(level)
-                          return (
-                            <span key={d} className="text-xs px-2 py-0.5 rounded-full border font-medium" style={{ backgroundColor: color + '15', color, borderColor: color + '40' }}>
-                              {dimInfo.label.split(' ')[0]} : {score}/16
-                            </span>
-                          )
-                        })}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        {r.email && <span className="text-xs text-gray-400">{r.email}</span>}
-                        {r.phone && <span className="text-xs text-gray-400">{r.phone}</span>}
-                      </div>
-                    </div>
+                    <button
+                      onClick={e => { e.stopPropagation(); setIEDirectDownload(r) }}
+                      disabled={downloadingIERow === r.id}
+                      className="flex-shrink-0 p-2 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded-lg transition-colors disabled:opacity-50"
+                      title="Télécharger le rapport PDF"
+                    >
+                      {downloadingIERow === r.id
+                        ? <RefreshCw className="w-4 h-4 animate-spin" />
+                        : <Download className="w-4 h-4" />}
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); deleteIEResult(r.id) }}
+                      className="flex-shrink-0 p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                      title="Supprimer cette passation"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 )
               })
@@ -1170,12 +1460,21 @@ export default function Tests() {
                               <span className="text-xs font-bold text-teal-600">{pct}%</span>
                             </div>
                           </div>
-                          <button
-                            onClick={e => { e.stopPropagation(); deleteQSResult(r.id) }}
-                            className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-                            title="Supprimer">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              onClick={e => { e.stopPropagation(); setQsDirectDownload(r) }}
+                              disabled={downloadingQSRow === r.id}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-teal-600 hover:bg-teal-50 transition-colors disabled:opacity-50"
+                              title="Télécharger le rapport PDF">
+                              {downloadingQSRow === r.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                            </button>
+                            <button
+                              onClick={e => { e.stopPropagation(); deleteQSResult(r.id) }}
+                              className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                              title="Supprimer">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       </Card>
                     )
@@ -1264,6 +1563,13 @@ export default function Tests() {
                             </div>
                           </div>
                           <button
+                            onClick={e => { e.stopPropagation(); downloadCompassRowPDF(r) }}
+                            disabled={downloadingCompassRow === r.id}
+                            className="p-1.5 rounded-lg text-purple-300 hover:text-purple-600 hover:bg-purple-50 transition-colors flex-shrink-0"
+                            title="Télécharger PDF">
+                            {downloadingCompassRow === r.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                          </button>
+                          <button
                             onClick={e => { e.stopPropagation(); deleteCompassResult(r.id) }}
                             className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
                             title="Supprimer">
@@ -1335,6 +1641,205 @@ export default function Tests() {
               </a>
             </div>
           </Modal>
+        )
+      })()}
+
+      {/* TAB: VALEURS */}
+      {activeTab === 'valeurs' && (
+        <div className="space-y-4">
+          {/* Lien passation */}
+          <div className="flex items-center gap-3 p-4 bg-violet-50 dark:bg-violet-900/10 rounded-xl border border-violet-100 dark:border-violet-800">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">Lien de passation — Test des Valeurs</p>
+              <p className="text-xs text-gray-400 truncate mt-0.5">{TEST_VALEURS_URL}</p>
+            </div>
+            <button onClick={() => { navigator.clipboard.writeText(TEST_VALEURS_URL); toast.success('Lien copié !') }}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-colors flex-shrink-0">
+              <Copy className="w-3.5 h-3.5" /> Copier
+            </button>
+            <a href={TEST_VALEURS_URL} target="_blank" rel="noreferrer"
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition-colors flex-shrink-0">
+              <ExternalLink className="w-3.5 h-3.5" /> Ouvrir
+            </a>
+          </div>
+
+          {/* Search + sort + refresh */}
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input value={valeursSearch} onChange={e => setValeursSearch(e.target.value)}
+                placeholder="Rechercher un participant…"
+                className="w-full pl-9 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-300" />
+            </div>
+            <button onClick={() => setValeursSortOrder(o => o === 'desc' ? 'asc' : 'desc')}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+              <ArrowUpDown className="w-4 h-4" />
+              {valeursSortOrder === 'desc' ? 'Plus récent' : 'Plus ancien'}
+            </button>
+            <button onClick={() => loadValeursResults(false)} disabled={refreshingValeurs}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
+              <RefreshCw className={`w-4 h-4 ${refreshingValeurs ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          {loadingValeurs ? (
+            <div className="text-center py-12 text-gray-400">Chargement…</div>
+          ) : (
+            <>
+              <p className="text-xs text-gray-400">{valeursResults.length} résultat{valeursResults.length !== 1 ? 's' : ''}</p>
+              <div className="grid gap-3">
+                {valeursResults
+                  .filter(r => {
+                    const q = valeursSearch.toLowerCase()
+                    return !q || `${r.first_name} ${r.last_name}`.toLowerCase().includes(q)
+                  })
+                  .sort((a, b) => {
+                    const da = new Date(a.created_at).getTime()
+                    const db = new Date(b.created_at).getTime()
+                    return valeursSortOrder === 'desc' ? db - da : da - db
+                  })
+                  .map(r => {
+                    const scoresMap: Record<ValeurKey, number> = r.scores || {}
+                    const sorted = [...VALEURS].sort((a, b) => (scoresMap[b.key] ?? 0) - (scoresMap[a.key] ?? 0))
+                    const top3 = sorted.slice(0, 3)
+                    return (
+                      <div key={r.id} onClick={() => setSelectedValeurs(r)}
+                        className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-4 flex items-center gap-4 hover:shadow-sm transition-all cursor-pointer">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-base font-bold"
+                          style={{ background: '#ede9fe', color: '#5b21b6' }}>
+                          {(r.first_name?.[0] || '?').toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{r.first_name} {r.last_name}</p>
+                          <div className="flex gap-1 mt-1 flex-wrap">
+                            {top3.map((v, i) => (
+                              <span key={v.key} className="text-xs px-2 py-0.5 rounded-full font-medium"
+                                style={{ background: v.bg, color: v.color, border: `1px solid ${v.color}33` }}>
+                                {i + 1}. {v.label}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs text-gray-300">{formatDate(r.created_at)}</span>
+                          <button onClick={e => { e.stopPropagation(); setValeursDirectDownload(r) }}
+                            disabled={downloadingValeursRow === r.id}
+                            className="p-1.5 rounded-lg text-violet-300 hover:text-violet-600 hover:bg-violet-50 transition-colors"
+                            title="Télécharger PDF">
+                            {downloadingValeursRow === r.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); deleteValeursResult(r.id) }}
+                            className="p-1.5 rounded-lg text-red-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                {valeursResults.length === 0 && (
+                  <div className="text-center py-12 text-gray-400">
+                    <p className="text-4xl mb-3">💎</p>
+                    <p className="font-medium">Aucun résultat pour l'instant</p>
+                    <p className="text-sm mt-1">Partagez le lien de passation avec vos participants</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* VALEURS DETAIL MODAL */}
+      {selectedValeurs && (() => {
+        const r = selectedValeurs
+        const scoresMap: Record<ValeurKey, number> = r.scores || {}
+        const sorted = [...VALEURS].sort((a, b) => (scoresMap[b.key] ?? 0) - (scoresMap[a.key] ?? 0))
+        const top5 = sorted.slice(0, 5)
+        const profileText = getProfileText(r.first_name, top5)
+
+        async function downloadValeursPDF() {
+          if (!valeursReportRef.current) return
+          setDownloadingValeurs(true)
+          try {
+            const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+              import('html2canvas'),
+              import('jspdf'),
+            ])
+            const canvas = await html2canvas(valeursReportRef.current.children[0] as HTMLElement, {
+              scale: 2, useCORS: true, allowTaint: true,
+              backgroundColor: '#ffffff', width: VALEURS_PAGE_W, height: VALEURS_PAGE_H,
+            })
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [VALEURS_PAGE_W, VALEURS_PAGE_H] })
+            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, VALEURS_PAGE_W, VALEURS_PAGE_H)
+            pdf.save(`TEST DES VALEURS_${r.first_name} ${(r.last_name || '').toUpperCase()}.pdf`)
+          } catch { toast.error('Erreur lors de la génération du PDF') }
+          setDownloadingValeurs(false)
+        }
+
+        return (
+          <>
+            <Modal open onClose={() => setSelectedValeurs(null)} title={`${r.first_name} ${r.last_name} — Test des Valeurs`} size="lg">
+              <div className="space-y-5">
+                {/* Download button */}
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-400">{formatDate(r.created_at)}</p>
+                  <button onClick={downloadValeursPDF} disabled={downloadingValeurs}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-xs font-semibold transition-opacity hover:opacity-90 disabled:opacity-50"
+                    style={{ background: '#1D3462' }}>
+                    <Download className="w-3.5 h-3.5" />
+                    {downloadingValeurs ? 'Génération…' : 'PDF'}
+                  </button>
+                </div>
+
+                {/* Top 5 — style rapport */}
+                <div className="rounded-2xl border border-gray-100 overflow-hidden">
+                  <div className="px-5 pt-4 pb-2">
+                    <p className="text-xs text-gray-400 font-medium uppercase tracking-widest">Analyse</p>
+                    <p className="text-lg font-black" style={{ color: '#1D3462' }}>DES VALEURS</p>
+                  </div>
+                  <div className="mx-5 mb-4 border-l-4 pl-3" style={{ borderColor: '#1D3462' }}>
+                    <span className="text-sm font-bold" style={{ color: '#1D3462' }}>Voici vos cinq valeurs Fondamentales :</span>
+                  </div>
+                  <div className="px-5">
+                    {top5.map((v) => (
+                      <div key={v.key}>
+                        <p className="text-center font-bold text-sm py-2.5" style={{ color: '#1D3462' }}>{v.label}</p>
+                        <div className="h-px bg-gray-800 opacity-20" />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-center text-xs text-gray-500 leading-relaxed px-6 py-4">{profileText}</p>
+                </div>
+
+                {/* Classement complet */}
+                <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                  {sorted.map((v, i) => {
+                    const s = scoresMap[v.key] ?? 0
+                    const pct = Math.round((s / 15) * 100)
+                    return (
+                      <div key={v.key} className="flex items-center gap-2 text-sm">
+                        <span className="w-5 text-xs text-gray-400 text-right flex-shrink-0">{i + 1}.</span>
+                        <span className="w-44 text-sm flex-shrink-0 truncate" style={{ color: v.color }}>{v.label}</span>
+                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: v.color }} />
+                        </div>
+                        <span className="w-8 text-xs text-gray-500 text-right flex-shrink-0 font-medium">{s}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </Modal>
+            {/* Hidden PDF template */}
+            <div style={{ position: 'fixed', left: -9999, top: 0, pointerEvents: 'none' }}>
+              <ValeursReportTemplate
+                ref={valeursReportRef}
+                firstName={r.first_name}
+                lastName={r.last_name || ''}
+                scores={scoresMap as Record<string, number>}
+              />
+            </div>
+          </>
         )
       })()}
 
@@ -1482,12 +1987,16 @@ export default function Tests() {
                           <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{r.first_name} {r.last_name}</p>
                           <p className="text-xs text-gray-400">{r.email || '—'}</p>
                         </div>
-                        <div className="flex items-center gap-3 flex-shrink-0">
+                        <div className="flex items-center gap-2 flex-shrink-0">
                           <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${levelColor}`}>
                             {correct}/{total40} · {pctVal}%
                           </span>
                           <span className="text-xs text-gray-400">{r.dominant_profile}</span>
                           <span className="text-xs text-gray-300">{formatDate(r.created_at)}</span>
+                          <button onClick={e => { e.stopPropagation(); setSelectedQuiz(r) }}
+                            className="p-1.5 rounded-lg text-amber-400 hover:text-amber-600 hover:bg-amber-50 transition-colors" title="Voir + télécharger">
+                            <Download className="w-4 h-4" />
+                          </button>
                           <button onClick={e => { e.stopPropagation(); deleteQuizResult(r.id) }}
                             className="p-1.5 rounded-lg text-red-300 hover:text-red-500 hover:bg-red-50 transition-colors">
                             <Trash2 className="w-4 h-4" />
@@ -1509,59 +2018,486 @@ export default function Tests() {
         </div>
       )}
 
+      {/* TAB: QUIZ COACH N2 */}
+      {activeTab === 'quiz_coach_n2' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-4 bg-purple-50 dark:bg-purple-900/10 rounded-xl border border-purple-100 dark:border-purple-800">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">Lien de passation — Quiz Final N2</p>
+              <p className="text-xs text-gray-400 truncate mt-0.5">{TEST_QUIZ_COACH_N2_URL}</p>
+            </div>
+            <button onClick={() => { navigator.clipboard.writeText(TEST_QUIZ_COACH_N2_URL); toast.success('Lien copié !') }}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-colors flex-shrink-0">
+              <Copy className="w-3.5 h-3.5" /> Copier
+            </button>
+            <a href={TEST_QUIZ_COACH_N2_URL} target="_blank" rel="noreferrer"
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-colors flex-shrink-0">
+              <ExternalLink className="w-3.5 h-3.5" /> Ouvrir
+            </a>
+          </div>
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input value={quizN2Search} onChange={e => setQuizN2Search(e.target.value)}
+                placeholder="Rechercher un participant…"
+                className="w-full pl-9 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-300" />
+            </div>
+            <button onClick={() => setQuizN2SortOrder(o => o === 'desc' ? 'asc' : 'desc')}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+              <ArrowUpDown className="w-4 h-4" />
+              {quizN2SortOrder === 'desc' ? 'Plus récent' : 'Plus ancien'}
+            </button>
+            <button onClick={() => loadQuizN2Results(false)} disabled={refreshingQuizN2}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
+              <RefreshCw className={`w-4 h-4 ${refreshingQuizN2 ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+          {loadingQuizN2 ? (
+            <div className="text-center py-12 text-gray-400">Chargement…</div>
+          ) : (
+            <>
+              <p className="text-xs text-gray-400">{quizN2Results.length} résultat{quizN2Results.length !== 1 ? 's' : ''}</p>
+              <div className="grid gap-3">
+                {quizN2Results
+                  .filter(r => {
+                    const q = quizN2Search.toLowerCase()
+                    return !q || `${r.first_name} ${r.last_name}`.toLowerCase().includes(q) || (r.email || '').toLowerCase().includes(q)
+                  })
+                  .sort((a, b) => {
+                    const da = new Date(a.created_at).getTime()
+                    const db = new Date(b.created_at).getTime()
+                    return quizN2SortOrder === 'desc' ? db - da : da - db
+                  })
+                  .map(r => {
+                    const scores = r.scores || {}
+                    const pctVal = scores.percentage ?? Math.round(((scores.correct ?? 0) / (scores.total ?? 40)) * 100)
+                    const correct = scores.correct ?? 0
+                    const total40 = scores.total ?? 40
+                    const levelColor = pctVal >= 90 ? 'bg-green-100 text-green-700' : pctVal >= 70 ? 'bg-blue-100 text-blue-700' : pctVal >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                    return (
+                      <div key={r.id} onClick={() => setSelectedQuizN2(r)}
+                        className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-4 flex items-center gap-4 hover:shadow-sm transition-all cursor-pointer">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-base font-bold"
+                          style={{ background: '#a855f722', color: '#6b21a8' }}>
+                          {(r.first_name?.[0] || '?').toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{r.first_name} {r.last_name}</p>
+                          <p className="text-xs text-gray-400">{r.email || '—'}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${levelColor}`}>
+                            {correct}/{total40} · {pctVal}%
+                          </span>
+                          <span className="text-xs text-gray-300">{new Date(r.created_at).toLocaleDateString('fr-FR')}</span>
+                          <button onClick={e => { e.stopPropagation(); deleteQuizN2Result(r.id) }}
+                            className="p-1.5 rounded-lg text-red-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                {quizN2Results.length === 0 && (
+                  <div className="text-center py-12 text-gray-400">
+                    <p className="text-4xl mb-3">📋</p>
+                    <p className="font-medium">Aucun résultat pour l'instant</p>
+                    <p className="text-sm mt-1">Partagez le lien de passation avec vos apprenants N2</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* TAB: QUIZ DEV PERS */}
+      {activeTab === 'quiz_dev_pers' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-4 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl border border-emerald-100 dark:border-emerald-800">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">Lien de passation — Quiz Développement Personnel</p>
+              <p className="text-xs text-gray-400 truncate mt-0.5">{TEST_QUIZ_DP_URL}</p>
+            </div>
+            <button onClick={() => { navigator.clipboard.writeText(TEST_QUIZ_DP_URL); toast.success('Lien copié !') }}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-colors flex-shrink-0">
+              <Copy className="w-3.5 h-3.5" /> Copier
+            </button>
+            <a href={TEST_QUIZ_DP_URL} target="_blank" rel="noreferrer"
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-colors flex-shrink-0">
+              <ExternalLink className="w-3.5 h-3.5" /> Ouvrir
+            </a>
+          </div>
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input value={quizDpSearch} onChange={e => setQuizDpSearch(e.target.value)}
+                placeholder="Rechercher un participant…"
+                className="w-full pl-9 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+            </div>
+            <button onClick={() => setQuizDpSortOrder(o => o === 'desc' ? 'asc' : 'desc')}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+              <ArrowUpDown className="w-4 h-4" />
+              {quizDpSortOrder === 'desc' ? 'Plus récent' : 'Plus ancien'}
+            </button>
+            <button onClick={() => loadQuizDpResults(false)} disabled={refreshingQuizDp}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
+              <RefreshCw className={`w-4 h-4 ${refreshingQuizDp ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+          {loadingQuizDp ? (
+            <div className="text-center py-12 text-gray-400">Chargement…</div>
+          ) : (
+            <>
+              <p className="text-xs text-gray-400">{quizDpResults.length} résultat{quizDpResults.length !== 1 ? 's' : ''}</p>
+              <div className="grid gap-3">
+                {quizDpResults
+                  .filter(r => {
+                    const q = quizDpSearch.toLowerCase()
+                    return !q || `${r.first_name} ${r.last_name}`.toLowerCase().includes(q)
+                  })
+                  .sort((a, b) => {
+                    const da = new Date(a.created_at).getTime()
+                    const db = new Date(b.created_at).getTime()
+                    return quizDpSortOrder === 'desc' ? db - da : da - db
+                  })
+                  .map(r => {
+                    const scores = r.scores || {}
+                    const pctVal = scores.percentage ?? Math.round(((scores.correct ?? 0) / (scores.total ?? 40)) * 100)
+                    const correct = scores.correct ?? 0
+                    const total40 = scores.total ?? 40
+                    const levelColor = pctVal >= 90 ? 'bg-green-100 text-green-700' : pctVal >= 75 ? 'bg-blue-100 text-blue-700' : pctVal >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                    return (
+                      <div key={r.id} onClick={() => setSelectedQuizDp(r)}
+                        className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-4 flex items-center gap-4 hover:shadow-sm transition-all cursor-pointer">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-base font-bold"
+                          style={{ background: '#d1fae522', color: '#065f46' }}>
+                          {(r.first_name?.[0] || '?').toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{r.first_name} {r.last_name}</p>
+                          <p className="text-xs text-gray-400">Quiz Développement Personnel</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${levelColor}`}>
+                            {correct}/{total40} · {pctVal}%
+                          </span>
+                          <span className="text-xs text-gray-300">{new Date(r.created_at).toLocaleDateString('fr-FR')}</span>
+                          <button onClick={e => { e.stopPropagation(); deleteQuizDpResult(r.id) }}
+                            className="p-1.5 rounded-lg text-red-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                {quizDpResults.length === 0 && (
+                  <div className="text-center py-12 text-gray-400">
+                    <p className="text-4xl mb-3">🌱</p>
+                    <p className="font-medium">Aucun résultat pour l'instant</p>
+                    <p className="text-sm mt-1">Partagez le lien de passation avec vos apprenants</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* QUIZ DEV PERS DETAIL MODAL */}
+      {selectedQuizDp && (() => {
+        const r = selectedQuizDp
+        const scores = r.scores || {}
+        const correct = scores.correct ?? 0
+        const totalQ = scores.total ?? 40
+        const pctVal = scores.percentage ?? Math.round((correct / totalQ) * 100)
+        const answers = r.answers || {}
+        const levelColor = pctVal >= 90 ? { bg: '#dcfce7', color: '#166534' } : pctVal >= 75 ? { bg: '#dbeafe', color: '#1e40af' } : { bg: '#fee2e2', color: '#991b1b' }
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setSelectedQuizDp(null)}>
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-5 border-b border-gray-100 sticky top-0 bg-white dark:bg-gray-900 z-10">
+                <div>
+                  <h3 className="font-bold text-gray-900 dark:text-gray-100">{r.first_name} {r.last_name}</h3>
+                  <p className="text-xs text-gray-400">Quiz Développement Personnel · {new Date(r.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                </div>
+                <button onClick={() => setSelectedQuizDp(null)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="flex justify-center">
+                  <div className="text-center px-8 py-4 rounded-2xl" style={{ background: levelColor.bg }}>
+                    <p className="text-5xl font-black" style={{ color: levelColor.color }}>{pctVal}%</p>
+                    <p className="text-sm mt-1" style={{ color: levelColor.color }}>{correct} / {totalQ} bonnes réponses</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Résultats par thème</p>
+                  {QUIZ_DP_THEMES.map(theme => {
+                    const qs = QUIZ_DP_QUESTIONS.filter(q => q.theme === theme)
+                    const nb = qs.filter(q => answers[q.id] === q.correct).length
+                    const pct = Math.round((nb / qs.length) * 100)
+                    const col = pct >= 75 ? '#16a34a' : pct >= 50 ? '#d97706' : '#dc2626'
+                    return (
+                      <div key={theme} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{theme}</p>
+                        </div>
+                        <span className="text-sm font-bold" style={{ color: col }}>{nb}/{qs.length}</span>
+                        <span className="text-xs text-gray-400">{pct}%</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* QUIZ N2 DETAIL MODAL */}
+      {selectedQuizN2 && (() => {
+        const r = selectedQuizN2
+        const scores = r.scores || {}
+        const correct = scores.correct ?? 0
+        const totalQ = scores.total ?? 40
+        const pctVal = scores.percentage ?? Math.round((correct / totalQ) * 100)
+        const answers = r.answers || {}
+        const levelColor = pctVal >= 90 ? { bg: '#dcfce7', color: '#166534' } : pctVal >= 75 ? { bg: '#dbeafe', color: '#1e40af' } : { bg: '#fee2e2', color: '#991b1b' }
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setSelectedQuizN2(null)}>
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-5 border-b border-gray-100 sticky top-0 bg-white dark:bg-gray-900 z-10">
+                <div>
+                  <h3 className="font-bold text-gray-900 dark:text-gray-100">{r.first_name} {r.last_name}</h3>
+                  <p className="text-xs text-gray-400">Quiz Final N2 · {new Date(r.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                </div>
+                <button onClick={() => setSelectedQuizN2(null)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="flex justify-center">
+                  <div className="text-center px-8 py-4 rounded-2xl" style={{ background: levelColor.bg }}>
+                    <p className="text-5xl font-black" style={{ color: levelColor.color }}>{pctVal}%</p>
+                    <p className="text-sm mt-1" style={{ color: levelColor.color }}>{correct} / {totalQ} bonnes réponses</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Résultats par thème</p>
+                  {QUIZ_N2_THEMES.map(theme => {
+                    const qs = QUIZ_N2_QUESTIONS.filter(q => q.theme === theme)
+                    const nb = qs.filter(q => answers[q.id] === q.correct).length
+                    const pct = Math.round((nb / qs.length) * 100)
+                    const col = pct >= 75 ? '#16a34a' : pct >= 50 ? '#d97706' : '#dc2626'
+                    return (
+                      <div key={theme} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{theme}</p>
+                        </div>
+                        <span className="text-sm font-bold" style={{ color: col }}>{nb}/{qs.length}</span>
+                        <span className="text-xs text-gray-400">{pct}%</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* QUIZ DETAIL MODAL */}
       {selectedQuiz && (() => {
         const r = selectedQuiz
         const scores = r.scores || {}
         const correct = scores.correct ?? 0
-        const total40 = scores.total ?? 40
-        const pctVal = scores.percentage ?? Math.round((correct / total40) * 100)
+        const totalQ = scores.total ?? 40
+        const pctVal = scores.percentage ?? Math.round((correct / totalQ) * 100)
         const answers = r.answers || {}
-        const levelColor = pctVal >= 90 ? { bg: '#dcfce7', color: '#166534' } : pctVal >= 70 ? { bg: '#dbeafe', color: '#1e40af' } : pctVal >= 50 ? { bg: '#fef3c7', color: '#92400e' } : { bg: '#fee2e2', color: '#991b1b' }
+        const levelColor = pctVal >= 90 ? { bg: '#dcfce7', color: '#166534' } : pctVal >= 75 ? { bg: '#dbeafe', color: '#1e40af' } : { bg: '#fee2e2', color: '#991b1b' }
+
+        function downloadCSV() {
+          const rows = [['Q#', 'Question', 'Réponse donnée', 'Bonne réponse', 'Résultat']]
+          QUIZ_QUESTIONS.forEach(q => {
+            const chosen = answers[q.id]
+            const isOk = chosen === q.correct
+            rows.push([
+              String(q.id),
+              q.question,
+              chosen !== undefined ? q.options[chosen] : '—',
+              q.options[q.correct],
+              isOk ? 'Correct' : 'Incorrect',
+            ])
+          })
+          const csv = rows.map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+          const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `quiz_${r.first_name}_${r.last_name}.csv`
+          a.click()
+          URL.revokeObjectURL(url)
+        }
+
+        function downloadQuizPDF() {
+          const date = new Date(r.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+          const levelLabel = pctVal >= 90 ? 'Excellent' : pctVal >= 75 ? 'Très bien' : pctVal >= 60 ? 'Bien' : 'À retravailler'
+          const levelBg = pctVal >= 90 ? '#dcfce7' : pctVal >= 75 ? '#dbeafe' : pctVal >= 60 ? '#fef9c3' : '#fee2e2'
+          const levelCol = pctVal >= 90 ? '#166534' : pctVal >= 75 ? '#1e40af' : pctVal >= 60 ? '#854d0e' : '#991b1b'
+
+          // Group by theme
+          const byTheme = QUIZ_THEMES.map(theme => {
+            const qs = QUIZ_QUESTIONS.filter(q => q.theme === theme)
+            const nbCorrect = qs.filter(q => answers[q.id] === q.correct).length
+            const total = qs.length
+            return { theme, qs, nbCorrect, total }
+          })
+
+          const themeRows = byTheme.map(({ theme, nbCorrect, total }) => {
+            const pct = Math.round((nbCorrect / total) * 100)
+            const col = pct >= 75 ? '#16a34a' : pct >= 50 ? '#d97706' : '#dc2626'
+            return `<tr>
+              <td style="padding:7px 12px;font-size:13px;color:#374151;">${theme}</td>
+              <td style="padding:7px 12px;text-align:center;font-weight:700;font-size:13px;color:${col};">${nbCorrect}/${total}</td>
+              <td style="padding:7px 12px;text-align:center;font-size:12px;color:${col};">${pct}%</td>
+            </tr>`
+          }).join('')
+
+          const detailRows = Object.keys(answers).length > 0 ? QUIZ_QUESTIONS.map(q => {
+            const chosen = answers[q.id]
+            const isOk = chosen === q.correct
+            const bg = isOk ? '#f0fdf4' : '#fff8f8'
+            const border = isOk ? '#86efac' : '#fca5a5'
+            const icon = isOk ? '✓' : '✗'
+            const iconCol = isOk ? '#16a34a' : '#dc2626'
+            return `<tr style="background:${bg};border-bottom:1px solid ${border};">
+              <td style="padding:6px 10px;font-size:11px;color:#6b7280;white-space:nowrap;">${q.id}.</td>
+              <td style="padding:6px 10px;font-size:11px;color:#374151;">${q.question}</td>
+              <td style="padding:6px 10px;font-size:11px;color:#374151;">${chosen !== undefined ? q.options[chosen] : '—'}</td>
+              <td style="padding:6px 10px;font-size:11px;color:#16a34a;">${q.options[q.correct]}</td>
+              <td style="padding:6px 10px;font-size:13px;font-weight:700;color:${iconCol};text-align:center;">${icon}</td>
+            </tr>`
+          }).join('') : ''
+
+          const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+<title>Quiz Final — ${r.first_name} ${r.last_name}</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 900px; margin: 30px auto; color: #1a1a2e; padding: 0 20px; }
+  .header { display:flex; align-items:center; gap:16px; border-bottom:3px solid #1D3462; padding-bottom:16px; margin-bottom:24px; }
+  .brand { font-size:11px; letter-spacing:3px; color:#1D3462; text-transform:uppercase; font-weight:700; }
+  .title { font-size:22px; font-weight:800; color:#1D3462; }
+  .participant { background:#f9fafb; border-radius:8px; padding:12px 18px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; }
+  .score-box { text-align:center; padding:16px 32px; border-radius:12px; margin:0 auto 24px; display:inline-block; }
+  .score-big { font-size:56px; font-weight:900; line-height:1; }
+  .score-sub { font-size:15px; margin-top:4px; }
+  .badge { display:inline-block; padding:5px 16px; border-radius:20px; font-weight:800; font-size:14px; }
+  h3 { font-size:14px; font-weight:700; color:#1D3462; margin:20px 0 8px; border-left:4px solid #1D3462; padding-left:10px; }
+  table { width:100%; border-collapse:collapse; margin-bottom:20px; }
+  th { background:#1D3462; color:white; padding:8px 12px; font-size:12px; text-align:left; }
+  .footer { margin-top:32px; text-align:center; font-size:11px; color:#9ca3af; border-top:1px solid #e5e7eb; padding-top:12px; }
+  .no-print { margin:20px auto; display:block; padding:10px 30px; background:#1D3462; color:#fff; border:none; border-radius:8px; font-size:14px; cursor:pointer; }
+  @media print { .no-print { display:none; } }
+</style>
+</head><body>
+<div class="header">
+  <div><div class="brand">✦ &nbsp; Success Compass Academy</div><div class="title">Quiz Final — Correction</div></div>
+</div>
+<div class="participant">
+  <div><strong style="font-size:16px;">${r.first_name} ${r.last_name}</strong>${r.email ? `<br><span style="font-size:12px;color:#6b7280;">${r.email}</span>` : ''}</div>
+  <span style="font-size:12px;color:#6b7280;">Passé le ${date}</span>
+</div>
+<div style="text-align:center;margin-bottom:24px;">
+  <div class="score-box" style="background:${levelBg};">
+    <div class="score-big" style="color:${levelCol};">${pctVal}%</div>
+    <div class="score-sub" style="color:${levelCol};">${correct} / ${totalQ} bonnes réponses</div>
+    <div class="badge" style="background:${levelCol};color:white;margin-top:8px;">${levelLabel}</div>
+  </div>
+</div>
+<h3>Résultats par thème</h3>
+<table>
+  <tr><th>Thème</th><th style="text-align:center;">Score</th><th style="text-align:center;">%</th></tr>
+  ${themeRows}
+</table>
+${detailRows ? `<h3>Correction détaillée (40 questions)</h3>
+<table>
+  <tr><th style="width:30px;">Q</th><th>Question</th><th>Votre réponse</th><th>Bonne réponse</th><th style="width:30px;">✓</th></tr>
+  ${detailRows}
+</table>` : ''}
+<div class="footer">Success Compass Academy · Quiz Final · ${new Date().toLocaleDateString('fr-FR')}</div>
+<br><button class="no-print" onclick="window.print()">Imprimer / Enregistrer en PDF</button>
+</body></html>`
+
+          const w = window.open('', '_blank')
+          if (w) { w.document.write(html); w.document.close() }
+        }
+
+        const LETTERS = ['A', 'B', 'C', 'D']
 
         return (
           <Modal open onClose={() => setSelectedQuiz(null)} title={`${r.first_name} ${r.last_name} — Quiz Final`} size="lg">
             <div className="space-y-5">
-              {/* Score */}
-              <div className="flex items-center gap-4 p-4 rounded-xl" style={{ background: levelColor.bg }}>
-                <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold flex-shrink-0"
-                  style={{ background: 'white', color: levelColor.color, boxShadow: '0 0 0 3px ' + levelColor.color + '33' }}>
-                  {pctVal}%
+              {/* Score header */}
+              <div className="flex items-center justify-between gap-4 p-4 rounded-xl" style={{ background: levelColor.bg }}>
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold flex-shrink-0"
+                    style={{ background: 'white', color: levelColor.color, boxShadow: '0 0 0 3px ' + levelColor.color + '33' }}>
+                    {pctVal}%
+                  </div>
+                  <div>
+                    <p className="font-bold" style={{ color: levelColor.color }}>{correct}/{totalQ} bonnes réponses — {r.dominant_profile}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{r.email && `${r.email} · `}{formatDate(r.created_at)}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-bold text-lg" style={{ color: levelColor.color }}>{r.dominant_profile}</p>
-                  <p className="text-sm" style={{ color: levelColor.color }}>{correct} bonnes réponses sur {total40}</p>
-                  <p className="text-xs text-gray-500 mt-1">{r.email && `${r.email} · `}{r.phone && `${r.phone} · `}{formatDate(r.created_at)}</p>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button onClick={downloadQuizPDF}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-[#1D3462] text-white hover:opacity-90 transition-opacity">
+                    <Download className="w-3.5 h-3.5" /> PDF
+                  </button>
+                  {Object.keys(answers).length > 0 && (
+                    <button onClick={downloadCSV}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50">
+                      <Download className="w-3.5 h-3.5" /> CSV
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Score par thème */}
-              {Object.keys(answers).length > 0 && (() => {
-                const themes = ['Fondamentaux du coaching', 'Communication & écoute', 'Techniques & outils', 'Gestion des situations', 'Reprogrammation & lois', 'Life Book & séance']
-                return (
-                  <div>
-                    <p className="text-sm font-semibold text-gray-700 mb-3">Score par thème</p>
-                    <div className="space-y-2">
-                      {themes.map(theme => {
-                        const qs = QUIZ_QUESTIONS.filter(q => q.theme === theme)
-                        const ok = qs.filter(q => answers[q.id] === q.correct).length
-                        const themePct = Math.round((ok / qs.length) * 100)
-                        return (
-                          <div key={theme}>
-                            <div className="flex justify-between text-xs mb-1">
-                              <span className="text-gray-600">{theme}</span>
-                              <span className="font-medium">{ok}/{qs.length}</span>
-                            </div>
-                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${themePct}%`, background: themePct >= 70 ? '#16a34a' : themePct >= 50 ? '#d97706' : '#dc2626' }} />
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })()}
+              {/* Correction détaillée */}
+              {Object.keys(answers).length > 0 ? (
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                  {QUIZ_QUESTIONS.map(q => {
+                    const chosen = answers[q.id]
+                    const isOk = chosen === q.correct
+                    return (
+                      <div key={q.id} className="rounded-xl border p-3 text-sm"
+                        style={{ borderColor: isOk ? '#bbf7d0' : '#fecaca', background: isOk ? '#f0fdf4' : '#fff8f8' }}>
+                        <div className="flex items-start gap-2 mb-2">
+                          {isOk
+                            ? <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5 text-green-500" />
+                            : <XCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-red-400" />}
+                          <span className="font-medium text-gray-800 text-xs leading-snug">{q.id}. {q.question}</span>
+                        </div>
+                        <div className="ml-6 space-y-1">
+                          {q.options.map((opt, idx) => {
+                            const isChosen = chosen === idx
+                            const isCorrectOpt = q.correct === idx
+                            let style = 'text-gray-400'
+                            if (isCorrectOpt) style = 'text-green-700 font-semibold'
+                            else if (isChosen && !isCorrectOpt) style = 'text-red-500 line-through'
+                            return (
+                              <div key={idx} className={`text-xs flex items-start gap-1 ${style}`}>
+                                <span className="font-bold flex-shrink-0">{LETTERS[idx]}.</span>
+                                <span>{opt}</span>
+                                {isCorrectOpt && <span className="ml-1 flex-shrink-0 text-green-600">✓</span>}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400 text-center py-4">Réponses détaillées non disponibles pour cette soumission.</p>
+              )}
             </div>
           </Modal>
         )
@@ -1603,6 +2539,39 @@ export default function Tests() {
             />
           </div>
         </>
+      )}
+      {/* Hidden template for direct IE row download */}
+      {ieDirectDownload && (
+        <div style={{ position: 'fixed', left: -9999, top: 0, pointerEvents: 'none' }}>
+          <IEReportTemplate
+            ref={ieDirectRef}
+            firstName={ieDirectDownload.first_name}
+            lastName={ieDirectDownload.last_name}
+            scores={ieDirectDownload.scores}
+          />
+        </div>
+      )}
+      {/* Hidden template for direct QS row download */}
+      {qsDirectDownload && (
+        <div style={{ position: 'fixed', left: -9999, top: 0, pointerEvents: 'none' }}>
+          <QSReportTemplate
+            ref={qsDirectRef}
+            firstName={qsDirectDownload.first_name || ''}
+            lastName={qsDirectDownload.last_name || ''}
+            answers={qsDirectDownload.answers || {}}
+          />
+        </div>
+      )}
+      {/* Hidden template for direct Valeurs row download */}
+      {valeursDirectDownload && (
+        <div style={{ position: 'fixed', left: -9999, top: 0, pointerEvents: 'none' }}>
+          <ValeursReportTemplate
+            ref={valeursDirectRef}
+            firstName={valeursDirectDownload.first_name || ''}
+            lastName={valeursDirectDownload.last_name || ''}
+            scores={valeursDirectDownload.scores || {}}
+          />
+        </div>
       )}
     </div>
   )
