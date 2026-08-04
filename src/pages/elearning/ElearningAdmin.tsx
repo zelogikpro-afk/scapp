@@ -1,17 +1,18 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabaseAdmin } from '../../lib/supabase'
 import {
-  Plus, Pencil, Trash2, X, Search, Users, BookOpen, FileText,
+  Plus, Pencil, Trash2, X, Search, Users, BookOpen, FileText, Mail,
   FlaskConical, Megaphone, Calendar, Upload, ChevronRight, ChevronDown,
   Eye, EyeOff, PlayCircle, Lock, Unlock, RefreshCw, UserCheck,
-  UserX, Send, AlertCircle, Bell, Info, Zap
+  UserX, Send, AlertCircle, Bell, Info, Zap, Award
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Session { id: string; name: string; level: string; start_date: string; end_date: string; is_active: boolean }
 interface Recording { id: string; promotion_id: string; title: string; file_url: string; duration_minutes: number; order_index: number; created_at: string }
-interface ElearningDoc { id: string; level: string; title: string; file_url: string; is_visible: boolean; order_index: number }
-interface LearnerAccount { id: string; participant_id?: string; participant_name: string; username: string; password: string; formation_level: string; promotion_id: string | null; is_active: boolean }
+interface ElearningDoc { id: string; level: string; title: string; file_url: string; is_visible: boolean; order_index: number; excluded_promotion_ids?: string[]; excluded_learner_ids?: string[] }
+interface LearnerAccount { id: string; participant_id?: string; participant_name: string; username: string; password: string; formation_level: string; promotion_id: string | null; is_active: boolean; last_login?: string | null; login_count?: number }
+interface ActivityLogItem { id: string; learner_id: string; action: string; page: string | null; details: string | null; created_at: string }
 interface Participant { id: string; first_name: string; last_name: string; email: string; phone: string }
 interface TestUnlock { id: string; learner_id: string; test_type: string }
 interface Announcement { id: string; promotion_id: string | null; learner_id: string | null; target: string; type: string; content: string; created_at: string }
@@ -19,7 +20,16 @@ interface ScheduleItem { id: string; promotion_id: string; title: string; seance
 
 const LEVELS = ['N1', 'N2', 'N3']
 const LEVEL_LABEL: Record<string, string> = { N1: 'Niveau 1', N2: 'Niveau 2', N3: 'Niveau 3' }
-const TESTS = [{ type: 'mapping', label: 'Mapping', icon: '🧠' }, { type: 'ie', label: 'IE', icon: '❤️' }]
+const TESTS = [
+  { type: 'mapping', label: 'Mapping', icon: '🧠' },
+  { type: 'ie', label: 'IE', icon: '❤️' },
+  { type: 'qs', label: 'QS', icon: '🏆' },
+  { type: 'compass', label: 'Compass', icon: '🧭' },
+  { type: 'valeurs', label: 'Valeurs', icon: '💎' },
+  { type: 'quiz_coach', label: 'Quiz N1', icon: '📝' },
+  { type: 'quiz_coach_n2', label: 'Quiz N2', icon: '📋' },
+  { type: 'quiz_dev_pers', label: 'Quiz Dév. Pers.', icon: '🌱' },
+]
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
@@ -45,16 +55,17 @@ const btn = (variant: 'primary' | 'outline') => variant === 'primary'
   ? "px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-60"
   : "px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
 
-function genCreds(firstName: string) {
-  const year = new Date().getFullYear()
-  const num = String(Math.floor(Math.random() * 900) + 100)
-  const slug = (firstName || 'appr').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]/g, '').slice(0, 8)
-  return { username: `SC-${year}-${slug}`, password: `${slug}2026` }
+function genCreds(firstName: string, lastName: string) {
+  const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]/g, '')
+  const first = normalize(firstName || 'appr')
+  const last = normalize(lastName || '')
+  const username = last ? `${first[0]}.${last}` : first
+  return { username, password: `${first}2026` }
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function ElearningAdmin() {
-  type Tab = 'sessions' | 'recordings' | 'documents' | 'tests' | 'announcements' | 'learners'
+  type Tab = 'sessions' | 'recordings' | 'documents' | 'tests' | 'announcements' | 'learners' | 'digital' | 'activity'
   const [tab, setTab] = useState<Tab>('sessions')
 
   const [sessions, setSessions] = useState<Session[]>([])
@@ -67,6 +78,7 @@ export default function ElearningAdmin() {
   const [schedule, setSchedule] = useState<ScheduleItem[]>([])
   const [loading, setLoading] = useState(true)
   const [uploadError, setUploadError] = useState('')
+  const [sendingAccessId, setSendingAccessId] = useState<string | null>(null)
 
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set())
   const [expandedLevels, setExpandedLevels] = useState<Set<string>>(new Set(['N1']))
@@ -75,6 +87,7 @@ export default function ElearningAdmin() {
   const [sessionModal, setSessionModal] = useState<Partial<Session> | null>(null)
   const [recordingModal, setRecordingModal] = useState<{ data: Partial<Recording>; sessionId: string } | null>(null)
   const [docModal, setDocModal] = useState<Partial<ElearningDoc> | null>(null)
+  const [visibilityModal, setVisibilityModal] = useState<ElearningDoc | null>(null)
   const [scheduleModal, setScheduleModal] = useState<{ data: Partial<ScheduleItem>; sessionId: string } | null>(null)
 
   const [saving, setSaving] = useState(false)
@@ -92,6 +105,99 @@ export default function ElearningAdmin() {
   const [annoLearnerSearch, setAnnoLearnerSearch] = useState('')
 
   const recFileRef = useRef<HTMLInputElement>(null)
+
+  // Digital state
+  interface DigitalTaskAdmin { id: string; title: string; description: string | null; platform: string | null; deadline: string | null; status: string; priority: string; notes: string | null; created_at: string }
+  interface DigitalPostAdmin { id: string; task_id: string | null; platform: string; subject: string; chosen_caption: string | null; chosen_hashtags: string | null; canva_url: string | null; status: string; admin_comment: string | null; created_at: string; submitted_at: string | null }
+  const [digitalTasks, setDigitalTasks] = useState<DigitalTaskAdmin[]>([])
+  const [digitalPosts, setDigitalPosts] = useState<DigitalPostAdmin[]>([])
+  const [digitalSubTab, setDigitalSubTab] = useState<'tasks' | 'posts'>('tasks')
+  const [digitalTaskModal, setDigitalTaskModal] = useState<Partial<DigitalTaskAdmin> | null>(null)
+  const [rejectModal, setRejectModal] = useState<{ id: string; comment: string } | null>(null)
+  const [digitalSaving, setDigitalSaving] = useState(false)
+
+  // Quiz results for certificate date editing
+  interface QuizResult { id: string; test_type: string; first_name: string; last_name: string; participant_id: string | null; created_at: string }
+  const [quizResults, setQuizResults] = useState<QuizResult[]>([])
+  const [quizDateEdits, setQuizDateEdits] = useState<Record<string, string>>({})
+  const [quizDateSaving, setQuizDateSaving] = useState<Record<string, boolean>>({})
+
+  async function loadQuizResults() {
+    const { data } = await supabaseAdmin.from('test_results')
+      .select('id, test_type, first_name, last_name, participant_id, created_at')
+      .in('test_type', ['quiz_coach', 'quiz_coach_n2', 'quiz_coach_n3', 'quiz_dev_pers'])
+      .order('last_name')
+    setQuizResults(data || [])
+  }
+
+  async function saveQuizDate(id: string) {
+    const newDate = quizDateEdits[id]
+    if (!newDate) return
+    setQuizDateSaving(prev => ({ ...prev, [id]: true }))
+    await supabaseAdmin.from('test_results').update({ created_at: new Date(newDate).toISOString() }).eq('id', id)
+    setQuizResults(prev => prev.map(r => r.id === id ? { ...r, created_at: new Date(newDate).toISOString() } : r))
+    setQuizDateEdits(prev => { const n = { ...prev }; delete n[id]; return n })
+    setQuizDateSaving(prev => ({ ...prev, [id]: false }))
+  }
+
+  // Activity log state
+  const [activityLog, setActivityLog] = useState<ActivityLogItem[]>([])
+  const [activitySearch, setActivitySearch] = useState('')
+  const [activityLearnerFilter, setActivityLearnerFilter] = useState('')
+
+  async function loadActivity() {
+    const { data } = await supabaseAdmin.from('learner_activity_log')
+      .select('*').order('created_at', { ascending: false }).limit(500)
+    setActivityLog(data || [])
+  }
+
+  async function loadDigital() {
+    const [tRes, pRes] = await Promise.all([
+      supabaseAdmin.from('digital_tasks').select('*').order('created_at', { ascending: false }),
+      supabaseAdmin.from('digital_posts').select('*').order('created_at', { ascending: false }),
+    ])
+    setDigitalTasks(tRes.data || [])
+    setDigitalPosts(pRes.data || [])
+  }
+
+  async function saveDigitalTask() {
+    if (!digitalTaskModal?.title) return
+    setDigitalSaving(true)
+    const payload = {
+      title: digitalTaskModal.title,
+      description: digitalTaskModal.description || null,
+      platform: digitalTaskModal.platform || null,
+      deadline: digitalTaskModal.deadline || null,
+      status: digitalTaskModal.status || 'todo',
+      priority: digitalTaskModal.priority || 'normal',
+      notes: digitalTaskModal.notes || null,
+    }
+    if (digitalTaskModal.id) {
+      await supabaseAdmin.from('digital_tasks').update(payload).eq('id', digitalTaskModal.id)
+    } else {
+      await supabaseAdmin.from('digital_tasks').insert(payload)
+    }
+    setDigitalSaving(false)
+    setDigitalTaskModal(null)
+    await loadDigital()
+  }
+
+  async function deleteDigitalTask(id: string) {
+    if (!confirm('Supprimer cette tâche ?')) return
+    await supabaseAdmin.from('digital_tasks').delete().eq('id', id)
+    await loadDigital()
+  }
+
+  async function approvePost(id: string) {
+    await supabaseAdmin.from('digital_posts').update({ status: 'approved', reviewed_at: new Date().toISOString() }).eq('id', id)
+    setDigitalPosts(prev => prev.map(p => p.id === id ? { ...p, status: 'approved' } : p))
+  }
+
+  async function rejectPost(id: string, comment: string) {
+    await supabaseAdmin.from('digital_posts').update({ status: 'rejected', admin_comment: comment, reviewed_at: new Date().toISOString() }).eq('id', id)
+    setDigitalPosts(prev => prev.map(p => p.id === id ? { ...p, status: 'rejected', admin_comment: comment } : p))
+    setRejectModal(null)
+  }
 
   useEffect(() => { load() }, [])
 
@@ -205,6 +311,22 @@ export default function ElearningAdmin() {
     if (!confirm('Supprimer ce document ?')) return
     await supabaseAdmin.from('elearning_docs').delete().eq('id', id); await load()
   }
+  async function saveDocRestrictions(doc: ElearningDoc, excludedPromos: string[], excludedLearners: string[]) {
+    let config: Record<string, { excluded_promotion_ids: string[]; excluded_learner_ids: string[] }> = {}
+    try {
+      const { data } = await supabaseAdmin.storage.from('elearning').download('config/doc_visibility.json')
+      if (data) config = JSON.parse(await data.text()) || {}
+    } catch { /* no config yet */ }
+    if (!excludedPromos.length && !excludedLearners.length) {
+      delete config[doc.id]
+    } else {
+      config[doc.id] = { excluded_promotion_ids: excludedPromos, excluded_learner_ids: excludedLearners }
+    }
+    const blob = new Blob([JSON.stringify(config)], { type: 'application/json' })
+    await supabaseAdmin.storage.from('elearning').upload('config/doc_visibility.json', blob, { upsert: true })
+    setDocs(prev => prev.map(x => x.id === doc.id ? { ...x, excluded_promotion_ids: excludedPromos, excluded_learner_ids: excludedLearners } : x))
+    setVisibilityModal(null)
+  }
 
   // ── Test unlocks ──
   async function toggleTestUnlock(learnerId: string, testType: string) {
@@ -260,7 +382,7 @@ export default function ElearningAdmin() {
     const existingNames = new Set(learners.map(l => l.participant_name.toLowerCase()))
     const toCreate = participants.filter(p => !existingNames.has(`${p.first_name} ${p.last_name}`.toLowerCase()))
     for (const p of toCreate) {
-      const creds = genCreds(p.first_name)
+      const creds = genCreds(p.first_name, p.last_name)
       await supabaseAdmin.from('learner_accounts').insert({
         participant_name: `${p.first_name} ${p.last_name}`,
         username: creds.username,
@@ -277,6 +399,25 @@ export default function ElearningAdmin() {
     await supabaseAdmin.from('learner_accounts').update({ is_active: !l.is_active }).eq('id', l.id)
     setLearners(prev => prev.map(x => x.id === l.id ? { ...x, is_active: !l.is_active } : x))
   }
+  async function sendAccessEmail(l: LearnerAccount) {
+    if (!l.participant_id) { toast.error('Aucun participant lié à ce compte'); return }
+    setSendingAccessId(l.id)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/send-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ learnerId: l.id }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Erreur')
+      toast.success(`Email envoyé à ${json.email}`)
+    } catch (err: any) {
+      toast.error(err.message || 'Erreur envoi email')
+    }
+    setSendingAccessId(null)
+  }
+
   async function deleteLearner(id: string) {
     if (!confirm('Supprimer ce compte apprenant ?')) return
     await supabaseAdmin.from('learner_accounts').delete().eq('id', id); await load()
@@ -299,6 +440,8 @@ export default function ElearningAdmin() {
     { key: 'tests',         label: 'Tests',           icon: FlaskConical },
     { key: 'announcements', label: 'Annonces',        icon: Megaphone },
     { key: 'learners',      label: 'Apprenants',      icon: Users },
+    { key: 'digital',       label: '📱 Digital',      icon: Zap },
+    { key: 'activity',      label: 'Activité',        icon: Eye },
   ] as const
 
   const ANNO_TYPE_CONFIG = {
@@ -314,7 +457,7 @@ export default function ElearningAdmin() {
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl flex-wrap">
         {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
+          <button key={t.key} onClick={() => { setTab(t.key); if (t.key === 'digital') loadDigital(); if (t.key === 'activity') loadActivity(); if (t.key === 'tests') loadQuizResults() }}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${tab === t.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
             <t.icon className="w-4 h-4" />{t.label}
           </button>
@@ -562,6 +705,10 @@ export default function ElearningAdmin() {
                         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${d.is_visible ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
                         {d.is_visible ? <><Eye className="w-3 h-3" />Visible</> : <><EyeOff className="w-3 h-3" />Verrouillé</>}
                       </button>
+                      <button onClick={() => setVisibilityModal(d)} title="Gérer la visibilité par session/apprenant"
+                        className={`p-1.5 rounded-lg transition-colors ${(d.excluded_promotion_ids?.length || d.excluded_learner_ids?.length) ? 'text-orange-500 bg-orange-50 hover:bg-orange-100' : 'text-gray-400 hover:text-orange-500 hover:bg-orange-50'}`}>
+                        <Users className="w-4 h-4" />
+                      </button>
                       <button onClick={() => setDocModal({ ...d })} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
                       <button onClick={() => deleteDoc(d.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                     </div>
@@ -627,6 +774,58 @@ export default function ElearningAdmin() {
               </table>
             )}
           </div>
+
+          {/* Dates des certificats */}
+          {quizResults.length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-50 flex items-center gap-2">
+                <Award className="w-4 h-4 text-yellow-500" />
+                <h2 className="font-semibold text-gray-900">Dates des certificats</h2>
+                <span className="text-xs text-gray-400 ml-1">— Corrigez les dates affichées sur les certificats</span>
+              </div>
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                  <tr>
+                    <th className="text-left px-4 py-3">Apprenant</th>
+                    <th className="text-left px-4 py-3">Quiz</th>
+                    <th className="text-left px-4 py-3">Date actuelle</th>
+                    <th className="text-left px-4 py-3">Corriger la date</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {quizResults.map(r => {
+                    const quizLabel = r.test_type === 'quiz_coach' ? 'Quiz N1' : r.test_type === 'quiz_coach_n2' ? 'Quiz N2' : r.test_type === 'quiz_dev_pers' ? 'Quiz Dév. Pers.' : 'Quiz N3'
+                    const currentDate = new Date(r.created_at).toLocaleDateString('fr-FR')
+                    const editValue = quizDateEdits[r.id] ?? r.created_at.slice(0, 10)
+                    const isDirty = quizDateEdits[r.id] && quizDateEdits[r.id] !== r.created_at.slice(0, 10)
+                    return (
+                      <tr key={r.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium text-gray-900">{r.last_name} {r.first_name}</td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.test_type === 'quiz_coach' ? 'bg-blue-100 text-blue-700' : r.test_type === 'quiz_coach_n2' ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'}`}>{quizLabel}</span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-500">{currentDate}</td>
+                        <td className="px-4 py-3">
+                          <input type="date" value={editValue}
+                            onChange={e => setQuizDateEdits(prev => ({ ...prev, [r.id]: e.target.value }))}
+                            className="text-sm border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                        </td>
+                        <td className="px-4 py-3">
+                          {isDirty && (
+                            <button onClick={() => saveQuizDate(r.id)} disabled={quizDateSaving[r.id]}
+                              className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60">
+                              {quizDateSaving[r.id] ? '…' : 'Enregistrer'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -808,9 +1007,15 @@ export default function ElearningAdmin() {
                         </button>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <button onClick={() => deleteLearner(l.id)} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => sendAccessEmail(l)} disabled={sendingAccessId === l.id} title="Envoyer les accès par email"
+                            className="p-1.5 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg disabled:opacity-40 transition-colors">
+                            <Mail className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => deleteLearner(l.id)} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -920,6 +1125,17 @@ export default function ElearningAdmin() {
         </Modal>
       )}
 
+      {/* Visibility restrictions modal */}
+      {visibilityModal && (
+        <VisibilityModal
+          doc={visibilityModal}
+          sessions={sessions}
+          learners={learners}
+          onClose={() => setVisibilityModal(null)}
+          onSave={saveDocRestrictions}
+        />
+      )}
+
       {/* Schedule modal */}
       {scheduleModal && (
         <Modal title={scheduleModal.data.id ? 'Modifier la séance' : 'Ajouter une séance au planning'} onClose={() => setScheduleModal(null)}>
@@ -938,6 +1154,387 @@ export default function ElearningAdmin() {
           </div>
         </Modal>
       )}
+
+      {/* ── DIGITAL ── */}
+      {tab === 'digital' && (
+        <div className="space-y-5">
+          {/* Sub-tabs */}
+          <div className="flex gap-1 bg-purple-50 p-1 rounded-xl w-fit">
+            <button onClick={() => setDigitalSubTab('tasks')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${digitalSubTab === 'tasks' ? 'bg-white text-purple-800 shadow-sm' : 'text-purple-500 hover:text-purple-700'}`}>
+              ✅ Tâches
+            </button>
+            <button onClick={() => setDigitalSubTab('posts')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${digitalSubTab === 'posts' ? 'bg-white text-purple-800 shadow-sm' : 'text-purple-500 hover:text-purple-700'}`}>
+              📋 Posts à valider
+              {digitalPosts.filter(p => p.status === 'pending').length > 0 && (
+                <span className="ml-1.5 bg-amber-500 text-white text-xs rounded-full px-1.5 py-0.5">
+                  {digitalPosts.filter(p => p.status === 'pending').length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Tasks sub-tab */}
+          {digitalSubTab === 'tasks' && (
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <button onClick={() => setDigitalTaskModal({ status: 'todo', priority: 'normal' })} className={btn('primary')}>
+                  <Plus className="w-4 h-4 inline mr-1" />Nouvelle tâche
+                </button>
+              </div>
+              {digitalTasks.length === 0 ? (
+                <div className="text-center py-12 text-gray-400 bg-white rounded-2xl border border-gray-100">Aucune tâche digitale</div>
+              ) : (
+                <div className="space-y-2">
+                  {digitalTasks.map(task => (
+                    <div key={task.id} className="bg-white rounded-2xl border border-gray-100 p-4 flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-gray-900">{task.title}</p>
+                          {task.platform && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full capitalize">{task.platform}</span>}
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${task.priority === 'high' ? 'bg-red-100 text-red-600' : task.priority === 'low' ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-600'}`}>
+                            {task.priority === 'high' ? 'Urgent' : task.priority === 'low' ? 'Faible' : 'Normal'}
+                          </span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${task.status === 'todo' ? 'bg-gray-100 text-gray-600' : task.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : task.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                            {task.status === 'todo' ? 'À faire' : task.status === 'in_progress' ? 'En cours' : task.status === 'pending' ? 'En attente' : task.status === 'approved' ? 'Approuvé' : 'Publié'}
+                          </span>
+                        </div>
+                        {task.description && <p className="text-xs text-gray-500 mt-1">{task.description}</p>}
+                        {task.deadline && <p className="text-xs text-gray-400 mt-0.5">📅 {new Date(task.deadline).toLocaleDateString('fr-FR')}</p>}
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button onClick={() => setDigitalTaskModal({ ...task })} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
+                        <button onClick={() => deleteDigitalTask(task.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Posts sub-tab */}
+          {digitalSubTab === 'posts' && (
+            <div className="space-y-3">
+              {digitalPosts.filter(p => p.status === 'pending').length === 0 ? (
+                <div className="text-center py-12 text-gray-400 bg-white rounded-2xl border border-gray-100">
+                  <p className="text-3xl mb-2">✅</p>
+                  <p>Aucun post en attente de validation</p>
+                </div>
+              ) : (
+                digitalPosts.filter(p => p.status === 'pending').map(post => (
+                  <div key={post.id} className="bg-white rounded-2xl border border-gray-100 p-5 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <span className="text-xl">{post.platform === 'instagram' ? '📸' : post.platform === 'linkedin' ? '💼' : post.platform === 'story' ? '📱' : post.platform === 'facebook' ? '📘' : '📌'}</span>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-900 capitalize">{post.platform}</p>
+                        <p className="text-xs text-gray-500">{post.subject}</p>
+                        {post.submitted_at && <p className="text-xs text-gray-400">Soumis le {new Date(post.submitted_at).toLocaleDateString('fr-FR')}</p>}
+                      </div>
+                    </div>
+                    {post.chosen_caption && (
+                      <p className="text-sm text-gray-700 bg-gray-50 rounded-xl p-3 whitespace-pre-wrap">{post.chosen_caption}</p>
+                    )}
+                    {post.chosen_hashtags && (
+                      <p className="text-xs text-purple-500 font-mono">{post.chosen_hashtags}</p>
+                    )}
+                    {post.canva_url && (
+                      <a href={post.canva_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline">
+                        🎨 Voir le design Canva
+                      </a>
+                    )}
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={() => approvePost(post.id)}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-medium transition-colors">
+                        ✅ Approuver
+                      </button>
+                      <button onClick={() => setRejectModal({ id: post.id, comment: '' })}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl text-sm font-medium transition-colors">
+                        ❌ Refuser
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Digital task modal */}
+      {digitalTaskModal && (
+        <Modal title={digitalTaskModal.id ? 'Modifier la tâche' : 'Nouvelle tâche digitale'} onClose={() => setDigitalTaskModal(null)} wide>
+          <div className="p-5 space-y-4">
+            <Field label="Titre *"><input value={digitalTaskModal.title || ''} onChange={e => setDigitalTaskModal(f => ({ ...f!, title: e.target.value }))} className={inp} placeholder="Titre de la tâche" /></Field>
+            <Field label="Description"><textarea value={digitalTaskModal.description || ''} onChange={e => setDigitalTaskModal(f => ({ ...f!, description: e.target.value }))} rows={2} className={inp} /></Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Plateforme">
+                <select value={digitalTaskModal.platform || ''} onChange={e => setDigitalTaskModal(f => ({ ...f!, platform: e.target.value }))} className={inp}>
+                  <option value="">— Sélectionner —</option>
+                  <option value="instagram">📸 Instagram</option>
+                  <option value="linkedin">💼 LinkedIn</option>
+                  <option value="story">📱 Story</option>
+                  <option value="facebook">📘 Facebook</option>
+                  <option value="autre">📌 Autre</option>
+                </select>
+              </Field>
+              <Field label="Deadline"><input type="date" value={digitalTaskModal.deadline || ''} onChange={e => setDigitalTaskModal(f => ({ ...f!, deadline: e.target.value }))} className={inp} /></Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Statut">
+                <select value={digitalTaskModal.status || 'todo'} onChange={e => setDigitalTaskModal(f => ({ ...f!, status: e.target.value }))} className={inp}>
+                  <option value="todo">À faire</option>
+                  <option value="in_progress">En cours</option>
+                  <option value="pending">En attente</option>
+                  <option value="approved">Approuvé</option>
+                  <option value="published">Publié</option>
+                </select>
+              </Field>
+              <Field label="Priorité">
+                <select value={digitalTaskModal.priority || 'normal'} onChange={e => setDigitalTaskModal(f => ({ ...f!, priority: e.target.value }))} className={inp}>
+                  <option value="low">Faible</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">Urgent</option>
+                </select>
+              </Field>
+            </div>
+            <Field label="Notes"><textarea value={digitalTaskModal.notes || ''} onChange={e => setDigitalTaskModal(f => ({ ...f!, notes: e.target.value }))} rows={2} className={inp} /></Field>
+          </div>
+          <div className="flex gap-3 px-5 pb-5">
+            <button onClick={() => setDigitalTaskModal(null)} className={btn('outline')}>Annuler</button>
+            <button onClick={saveDigitalTask} disabled={digitalSaving || !digitalTaskModal.title} className={btn('primary')}>{digitalSaving ? 'Enregistrement…' : 'Enregistrer'}</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Reject post modal */}
+      {rejectModal && (
+        <Modal title="Refuser le post" onClose={() => setRejectModal(null)}>
+          <div className="p-5 space-y-4">
+            <p className="text-sm text-gray-600">Indiquez la raison du refus (visible par la chargée digital) :</p>
+            <textarea
+              value={rejectModal.comment}
+              onChange={e => setRejectModal(f => f ? { ...f, comment: e.target.value } : f)}
+              rows={4}
+              placeholder="Ex: Caption trop longue, revoir le ton…"
+              className={inp}
+            />
+          </div>
+          <div className="flex gap-3 px-5 pb-5">
+            <button onClick={() => setRejectModal(null)} className={btn('outline')}>Annuler</button>
+            <button onClick={() => rejectPost(rejectModal.id, rejectModal.comment)}
+              className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-colors">
+              Confirmer le refus
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── ACTIVITÉ ── */}
+      {tab === 'activity' && (() => {
+        const ACTION_LABELS: Record<string, string> = { login: 'Connexion', page_view: 'Page consultée' }
+        const learnerById = Object.fromEntries(learners.map(l => [l.id, l]))
+        const filteredLearners = learners
+          .filter(l => l.participant_name.toLowerCase().includes(activitySearch.toLowerCase()) || l.username.toLowerCase().includes(activitySearch.toLowerCase()))
+          .slice()
+          .sort((a, b) => (b.last_login || '').localeCompare(a.last_login || ''))
+        const filteredLog = activityLog.filter(a => !activityLearnerFilter || a.learner_id === activityLearnerFilter)
+
+        function timeAgo(iso: string | null | undefined) {
+          if (!iso) return 'Jamais connecté'
+          const diffMs = Date.now() - new Date(iso).getTime()
+          const mins = Math.floor(diffMs / 60000)
+          if (mins < 1) return "À l'instant"
+          if (mins < 60) return `Il y a ${mins} min`
+          const hrs = Math.floor(mins / 60)
+          if (hrs < 24) return `Il y a ${hrs} h`
+          const days = Math.floor(hrs / 24)
+          if (days < 30) return `Il y a ${days} j`
+          return new Date(iso).toLocaleDateString('fr-FR')
+        }
+
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input value={activitySearch} onChange={e => setActivitySearch(e.target.value)}
+                  placeholder="Rechercher un apprenant…"
+                  className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <button onClick={loadActivity} className={btn('outline')}>
+                <RefreshCw className="w-4 h-4 inline mr-1" />Actualiser
+              </button>
+            </div>
+
+            {/* Dernières connexions */}
+            <div>
+              <h2 className="font-semibold text-gray-900 mb-3">Dernières connexions</h2>
+              <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+                    <tr>
+                      <th className="text-left px-4 py-3">Apprenant</th>
+                      <th className="text-left px-4 py-3">Identifiant</th>
+                      <th className="text-left px-4 py-3">Dernière connexion</th>
+                      <th className="text-left px-4 py-3">Connexions</th>
+                      <th className="text-left px-4 py-3">Statut</th>
+                      <th className="text-right px-4 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {filteredLearners.map(l => (
+                      <tr key={l.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium text-gray-900">{l.participant_name}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-gray-500">{l.username}</td>
+                        <td className="px-4 py-3">
+                          <span className={l.last_login ? 'text-gray-700' : 'text-gray-400 italic'}>{timeAgo(l.last_login)}</span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-500">{l.login_count ?? 0}</td>
+                        <td className="px-4 py-3">
+                          {l.is_active
+                            ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Actif</span>
+                            : <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Désactivé</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button onClick={() => setActivityLearnerFilter(l.id === activityLearnerFilter ? '' : l.id)}
+                            className="text-xs text-blue-600 hover:underline">
+                            {activityLearnerFilter === l.id ? 'Voir tout' : 'Voir activité'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredLearners.length === 0 && (
+                      <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Aucun apprenant trouvé</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Journal d'activité */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-semibold text-gray-900">
+                  Journal d'activité {activityLearnerFilter && learnerById[activityLearnerFilter] ? `— ${learnerById[activityLearnerFilter].participant_name}` : ''}
+                </h2>
+                {activityLearnerFilter && (
+                  <button onClick={() => setActivityLearnerFilter('')} className="text-xs text-gray-400 hover:text-gray-600">Réinitialiser le filtre</button>
+                )}
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-50 max-h-[500px] overflow-y-auto">
+                {filteredLog.slice(0, 200).map(a => {
+                  const l = learnerById[a.learner_id]
+                  return (
+                    <div key={a.id} className="px-4 py-2.5 flex items-center gap-3 text-sm">
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${a.action === 'login' ? 'bg-blue-500' : 'bg-gray-300'}`} />
+                      <span className="font-medium text-gray-800 flex-shrink-0">{l?.participant_name || 'Apprenant inconnu'}</span>
+                      <span className="text-gray-400 flex-shrink-0">{ACTION_LABELS[a.action] || a.action}</span>
+                      {a.page && <span className="text-gray-400 text-xs flex-shrink-0">· {a.page}</span>}
+                      <span className="text-xs text-gray-400 ml-auto flex-shrink-0">{new Date(a.created_at).toLocaleString('fr-FR')}</span>
+                    </div>
+                  )
+                })}
+                {filteredLog.length === 0 && (
+                  <div className="px-4 py-8 text-center text-gray-400">Aucune activité enregistrée</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+    </div>
+  )
+}
+
+// ── Visibility Modal ──────────────────────────────────────────────────────────
+function VisibilityModal({ doc, sessions, learners, onClose, onSave }: {
+  doc: ElearningDoc
+  sessions: Session[]
+  learners: LearnerAccount[]
+  onClose: () => void
+  onSave: (doc: ElearningDoc, excludedPromos: string[], excludedLearners: string[]) => Promise<void>
+}) {
+  const [excludedPromos, setExcludedPromos] = useState<string[]>(doc.excluded_promotion_ids || [])
+  const [excludedLearners, setExcludedLearners] = useState<string[]>(doc.excluded_learner_ids || [])
+  const [saving, setSaving] = useState(false)
+
+  function togglePromo(id: string) {
+    setExcludedPromos(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+  function toggleLearner(id: string) {
+    setExcludedLearners(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+  async function handleSave() {
+    setSaving(true)
+    await onSave(doc, excludedPromos, excludedLearners)
+    setSaving(false)
+  }
+
+  const restrictionsCount = excludedPromos.length + excludedLearners.length
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <p className="font-semibold text-gray-900">Visibilité — {doc.title}</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {restrictionsCount === 0 ? 'Visible pour tous les apprenants du niveau ' + doc.level : `${restrictionsCount} restriction${restrictionsCount > 1 ? 's' : ''} active${restrictionsCount > 1 ? 's' : ''}`}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
+          {/* Promotions */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              Masquer pour ces sessions ({excludedPromos.length} exclue{excludedPromos.length > 1 ? 's' : ''})
+            </p>
+            <div className="space-y-1.5">
+              {sessions.map(s => (
+                <label key={s.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer border transition-colors ${excludedPromos.includes(s.id) ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-transparent hover:border-gray-200'}`}>
+                  <input type="checkbox" checked={excludedPromos.includes(s.id)} onChange={() => togglePromo(s.id)} className="rounded text-orange-500" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800">{s.name}</p>
+                    <p className="text-xs text-gray-400">{s.level}</p>
+                  </div>
+                  {excludedPromos.includes(s.id) && <span className="text-xs text-orange-600 font-medium">Masqué</span>}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Learners */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              Masquer pour ces apprenants ({excludedLearners.length} exclu{excludedLearners.length > 1 ? 's' : ''})
+            </p>
+            <div className="space-y-1.5 max-h-60 overflow-y-auto">
+              {learners.map(l => (
+                <label key={l.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer border transition-colors ${excludedLearners.includes(l.id) ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-transparent hover:border-gray-200'}`}>
+                  <input type="checkbox" checked={excludedLearners.includes(l.id)} onChange={() => toggleLearner(l.id)} className="rounded text-orange-500" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800">{l.username}</p>
+                    {l.participant_name && <p className="text-xs text-gray-400">{l.participant_name}</p>}
+                  </div>
+                  {excludedLearners.includes(l.id) && <span className="text-xs text-orange-600 font-medium">Masqué</span>}
+                </label>
+              ))}
+              {learners.length === 0 && <p className="text-sm text-gray-400 py-2">Aucun apprenant</p>}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3 px-5 py-4 border-t border-gray-100">
+          <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50">Annuler</button>
+          <button onClick={handleSave} disabled={saving} className="flex-1 py-2.5 bg-[#1D3462] text-white rounded-xl text-sm font-semibold hover:opacity-90 disabled:opacity-50">
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
