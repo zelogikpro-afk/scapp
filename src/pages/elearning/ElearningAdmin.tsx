@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
-import { supabaseAdmin } from '../../lib/supabase'
+import { supabase, supabaseAdmin } from '../../lib/supabase'
+import toast from 'react-hot-toast'
 import {
   Plus, Pencil, Trash2, X, Search, Users, BookOpen, FileText, Mail,
   FlaskConical, Megaphone, Calendar, Upload, ChevronRight, ChevronDown,
