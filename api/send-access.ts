@@ -23,18 +23,24 @@ export default async function handler(req: any, res: any) {
       .single()
     if (e1 || !learner) return res.status(404).json({ error: 'Apprenant introuvable' })
 
-    // Fetch email from participants
-    let email: string | null = null
-    if (learner.participant_id) {
-      const { data: p } = await db
-        .from('participants')
-        .select('email')
-        .eq('id', learner.participant_id)
-        .single()
+    // Get email: from request body, participant_id link, or name match
+    let email: string | null = req.body.email || null
+
+    if (!email && learner.participant_id) {
+      const { data: p } = await db.from('participants').select('email').eq('id', learner.participant_id).single()
       email = p?.email || null
     }
 
-    if (!email) return res.status(400).json({ error: 'Aucun email associé à cet apprenant' })
+    if (!email) {
+      // Try matching by name
+      const nameParts = learner.participant_name.trim().split(' ')
+      const firstName = nameParts[0]
+      const lastName = nameParts.slice(1).join(' ')
+      const { data: ps } = await db.from('participants').select('email').ilike('first_name', firstName).ilike('last_name', lastName).limit(1)
+      email = ps?.[0]?.email || null
+    }
+
+    if (!email) return res.status(400).json({ error: 'Aucun email trouvé pour cet apprenant' })
 
     const firstName = learner.participant_name.split(' ')[0]
     const loginUrl = 'https://success-compass.vercel.app/espace'

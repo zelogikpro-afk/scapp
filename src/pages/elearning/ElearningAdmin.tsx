@@ -401,14 +401,26 @@ export default function ElearningAdmin() {
     setLearners(prev => prev.map(x => x.id === l.id ? { ...x, is_active: !l.is_active } : x))
   }
   async function sendAccessEmail(l: LearnerAccount) {
-    if (!l.participant_id) { toast.error('Aucun participant lié à ce compte'); return }
     setSendingAccessId(l.id)
     try {
+      // Try to find email from loaded participants list
+      let email: string | undefined
+      if (l.participant_id) {
+        email = participants.find(p => p.id === l.participant_id)?.email
+      }
+      if (!email) {
+        const nameParts = l.participant_name.trim().split(' ')
+        const fn = nameParts[0]?.toLowerCase()
+        const ln = nameParts.slice(1).join(' ').toLowerCase()
+        email = participants.find(p =>
+          p.first_name.toLowerCase() === fn && p.last_name.toLowerCase() === ln
+        )?.email
+      }
       const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/send-access', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ learnerId: l.id }),
+        body: JSON.stringify({ learnerId: l.id, email }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Erreur')
