@@ -4,7 +4,10 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const isCapacitor = process.env.CAPACITOR_BUILD === 'true'
+
 export default defineConfig({
+  base: isCapacitor ? './' : '/',
   plugins: [
     react(),
     tailwindcss(),
