@@ -4,8 +4,14 @@ export interface LearnerSession {
   id: string
   username: string
   participantName: string
-  formationLevel: string
+  formationLevel: string   // niveau actuel (le plus avancé)
   isActive: boolean
+  participantId?: string
+  promotionId?: string     // session principale
+  email?: string
+  allPromotionIds: string[]  // toutes les sessions suivies
+  allLevels: string[]        // ex: ['N1', 'N2']
+  sessionToken?: string      // server-issued UUID, verified on every API call
 }
 
 export const getLearnerSession = (): LearnerSession | null => {

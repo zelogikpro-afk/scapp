@@ -11,6 +11,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/coaching/sessions': 'Séances de coaching',
   '/training': 'Formations',
   '/payments': 'Paiements',
+  '/recu-paiement': 'Reçus de paiement',
   '/calendar': 'Calendrier',
   '/tests': 'Tests psychométriques',
   '/documents': 'Documents',

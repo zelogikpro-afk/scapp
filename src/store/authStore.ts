@@ -40,6 +40,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   ],
   sales_agent: ['manage_leads', 'convert_lead', 'view_dashboard'],
   coach: ['view_coaching', 'manage_coaching', 'view_dashboard'],
+  digital: [],
 }
 
 export const useAuthStore = create<AuthState>()(

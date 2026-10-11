@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import {
   COMPASS_QUESTIONS, COMPASS_SCALE, COMPASS_PROFILES,
@@ -20,6 +20,23 @@ export default function TestCompassPage() {
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [saving, setSaving]   = useState(false)
   const [profile, setProfile] = useState<CompassProfileKey | null>(null)
+  const [fromSession, setFromSession] = useState(false)
+  const [participantId, setParticipantId] = useState<string | null>(null)
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('sc_learner_session')
+      if (!raw) return
+      const s = JSON.parse(raw)
+      const parts = (s.participantName || '').trim().split(' ')
+      setFirst(parts[0] || '')
+      setLast(parts.slice(1).join(' ') || '')
+      setEmail(s.email || '')
+      setPhone(s.phone || '')
+      setParticipantId(s.participantId || null)
+      setFromSession(true)
+    } catch { /* ignore */ }
+  }, [])
 
   const answered    = Object.keys(answers).length
   const total       = COMPASS_QUESTIONS.length
@@ -38,6 +55,7 @@ export default function TestCompassPage() {
 
     await supabase.from('test_results').insert({
       test_type:        'compass',
+      participant_id:   participantId,
       first_name:       firstName,
       last_name:        lastName,
       email:            email || null,
@@ -82,7 +100,7 @@ export default function TestCompassPage() {
             </span>
           ))}
         </div>
-        <button onClick={() => setStep('info')} style={{
+        <button onClick={() => setStep(fromSession ? 'questions' : 'info')} style={{
           width: '100%', padding: '14px 0', background: NAVY, color: '#fff',
           borderRadius: 12, border: 'none', fontSize: 16, fontWeight: 700, cursor: 'pointer',
         }}>
@@ -178,11 +196,9 @@ export default function TestCompassPage() {
       {/* Bottom CTA */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid #e5e7eb', padding: '16px 24px' }}>
         <div style={{ maxWidth: 700, margin: '0 auto' }}>
-          {!allAnswered && (
-            <p style={{ textAlign: 'center', color: '#f59e0b', fontSize: 13, marginBottom: 8, fontWeight: 600 }}>
-              {total - answered} question{total - answered > 1 ? 's' : ''} sans réponse
-            </p>
-          )}
+          <p style={{ textAlign: 'center', color: '#f59e0b', fontSize: 13, marginBottom: 8, fontWeight: 600, visibility: allAnswered ? 'hidden' : 'visible' }}>
+            {total - answered} question{total - answered > 1 ? 's' : ''} sans réponse
+          </p>
           <button onClick={submit} disabled={!allAnswered || saving} style={{
             width: '100%', padding: '14px 0', borderRadius: 12, border: 'none',
             background: allAnswered ? NAVY : '#d1d5db', color: '#fff',
@@ -226,7 +242,7 @@ export default function TestCompassPage() {
           </div>
 
           {/* Points forts + Zones dev */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+          {!fromSession && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
             <div style={{ background: '#fff', borderRadius: 16, padding: 24, boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
               <div style={{ fontWeight: 800, color: '#16a34a', marginBottom: 10, fontSize: 14 }}>✦ Points forts</div>
               <p style={{ margin: 0, color: '#444', fontSize: 14, lineHeight: 1.7 }}>{prof.pointsForts}</p>
@@ -235,10 +251,10 @@ export default function TestCompassPage() {
               <div style={{ fontWeight: 800, color: '#f59e0b', marginBottom: 10, fontSize: 14 }}>▲ Zones de développement</div>
               <p style={{ margin: 0, color: '#444', fontSize: 14, lineHeight: 1.7 }}>{prof.zonesDev}</p>
             </div>
-          </div>
+          </div>}
 
           {/* All scores bar chart */}
-          <div style={{ background: '#fff', borderRadius: 16, padding: 24, boxShadow: '0 1px 6px rgba(0,0,0,0.06)', marginBottom: 24 }}>
+          {!fromSession && <div style={{ background: '#fff', borderRadius: 16, padding: 24, boxShadow: '0 1px 6px rgba(0,0,0,0.06)', marginBottom: 24 }}>
             <div style={{ fontWeight: 800, color: NAVY, marginBottom: 16, fontSize: 15 }}>Tous vos scores</div>
             {sorted.map(([pk, sc]) => {
               const p = COMPASS_PROFILES[pk]
@@ -258,7 +274,7 @@ export default function TestCompassPage() {
                 </div>
               )
             })}
-          </div>
+          </div>}
 
           {/* PDF Download */}
           <div style={{ background: '#fff', borderRadius: 16, padding: 24, boxShadow: '0 1px 6px rgba(0,0,0,0.06)', textAlign: 'center' }}>

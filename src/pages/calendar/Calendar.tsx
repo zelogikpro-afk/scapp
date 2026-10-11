@@ -242,43 +242,45 @@ export default function CalendarPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center justify-between sm:justify-start gap-3">
           <div className="flex items-center gap-1">
             <button onClick={() => setCurrentMonth(m => subMonths(m, 1))} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 transition-colors">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 min-w-40 text-center capitalize">
+            <h2 className="text-base font-bold text-gray-900 dark:text-gray-100 min-w-32 text-center capitalize">
               {format(currentMonth, 'MMMM yyyy', { locale: fr })}
             </h2>
             <button onClick={() => setCurrentMonth(m => addMonths(m, 1))} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 transition-colors">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
-          <button onClick={() => setCurrentMonth(new Date())} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+          <button onClick={() => setCurrentMonth(new Date())} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors whitespace-nowrap">
             Aujourd'hui
           </button>
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex-1 sm:flex-none">
             {(['month', 'week', 'agenda'] as const).map(v => (
               <button
                 key={v}
                 onClick={() => setView(v)}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors capitalize ${view === v ? 'bg-blue-600 text-white' : 'text-gray-500 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                className={`flex-1 sm:flex-none px-3 py-1.5 text-xs font-medium transition-colors capitalize ${view === v ? 'bg-blue-600 text-white' : 'text-gray-500 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
               >
-                {v === 'month' ? 'Mois' : v === 'week' ? 'Semaine' : 'Agenda'}
+                {v === 'month' ? 'Mois' : v === 'week' ? 'Sem.' : 'Agenda'}
               </button>
             ))}
           </div>
-          <Button variant="primary" icon={<Plus className="w-4 h-4" />} size="sm" onClick={() => setShowModal(true)}>Ajouter</Button>
+          <Button variant="primary" icon={<Plus className="w-4 h-4" />} size="sm" onClick={() => setShowModal(true)}>
+            <span className="hidden sm:inline">Ajouter</span>
+          </Button>
         </div>
       </div>
 
-      <div className="flex gap-5">
+      <div className="flex flex-col lg:flex-row gap-5">
         {/* Calendar */}
-        <Card className="flex-1" padding="none">
+        <Card className="flex-1 min-w-0" padding="none">
           {/* Weekday headers */}
           <div className="grid grid-cols-7 border-b border-gray-100 dark:border-gray-800">
             {weekDays.map(d => (
@@ -295,16 +297,27 @@ export default function CalendarPage() {
               return (
                 <div
                   key={i}
-                  className={`min-h-24 p-1.5 border-r border-b border-gray-50 dark:border-gray-800/60 last:border-r-0 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/30 ${!isCurrentMonth ? 'opacity-40' : ''} ${(i + 1) % 7 === 0 ? 'border-r-0' : ''}`}
+                  className={`min-h-16 sm:min-h-24 p-0.5 sm:p-1.5 border-r border-b border-gray-50 dark:border-gray-800/60 last:border-r-0 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/30 ${!isCurrentMonth ? 'opacity-40' : ''} ${(i + 1) % 7 === 0 ? 'border-r-0' : ''}`}
                 >
-                  <div className={`text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full mb-1 ${today ? 'bg-blue-600 text-white' : 'text-gray-700 dark:text-gray-300'}`}>
+                  <div className={`text-xs font-medium w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full mb-0.5 sm:mb-1 ${today ? 'bg-blue-600 text-white' : 'text-gray-700 dark:text-gray-300'}`}>
                     {format(day, 'd')}
                   </div>
-                  {dayApts.slice(0, 3).map(apt => (
-                    <AppointmentCard key={apt.id} apt={apt} onClick={() => openDetail(apt)} />
-                  ))}
-                  {dayApts.length > 3 && (
-                    <div className="text-xs text-gray-400 pl-1">+{dayApts.length - 3} autres</div>
+                  <div className="hidden sm:block">
+                    {dayApts.slice(0, 3).map(apt => (
+                      <AppointmentCard key={apt.id} apt={apt} onClick={() => openDetail(apt)} />
+                    ))}
+                    {dayApts.length > 3 && (
+                      <div className="text-xs text-gray-400 pl-1">+{dayApts.length - 3}</div>
+                    )}
+                  </div>
+                  {/* Mobile: dot indicators */}
+                  {dayApts.length > 0 && (
+                    <div className="flex sm:hidden flex-wrap gap-0.5 mt-0.5" onClick={() => openDetail(dayApts[0])}>
+                      {dayApts.slice(0, 3).map(apt => (
+                        <div key={apt.id} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: apt.color || '#3b82f6' }} />
+                      ))}
+                      {dayApts.length > 3 && <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />}
+                    </div>
                   )}
                 </div>
               )
@@ -313,7 +326,7 @@ export default function CalendarPage() {
         </Card>
 
         {/* Sidebar: upcoming */}
-        <div className="w-72 flex-shrink-0 space-y-3">
+        <div className="w-full lg:w-72 flex-shrink-0 space-y-3">
           <Card>
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Prochains RDV</h3>
             {upcomingApts.length === 0 ? (

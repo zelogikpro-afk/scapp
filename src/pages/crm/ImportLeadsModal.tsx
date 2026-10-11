@@ -41,6 +41,8 @@ function formatDateDisplay(iso: string): string {
 
 function mapRow(headers: string[], vals: string[]) {
   const col = (...keywords: string[]) => colByKeyword(headers, vals, ...keywords)
+  // Détecter le programme selon les colonnes présentes
+  const isClassesAvenir = headers.some(h => h.toLowerCase().includes("nom_de_l'enfant") || h.toLowerCase().includes('nom_de_l_enfant') || h.toLowerCase().includes('enfant'))
   // Accès par nom exact (case-insensitive)
   const exact = (...names: string[]) => {
     for (const name of names) {
@@ -100,28 +102,41 @@ function mapRow(headers: string[], vals: string[]) {
   const sourceLabel = metaPlatform === 'ig' ? 'Instagram' : metaPlatform === 'fb' ? 'Facebook' : exact('source') || 'Meta'
   const createdAt = formatDate(metaCreatedTime)
 
+  // Champs spécifiques Classes de l'Avenir
+  const childName = isClassesAvenir ? col("nom_de_l'enfant", 'nom_de_l_enfant', 'enfant') : ''
+  const childAge = isClassesAvenir ? col("age_de_l'enfant", 'age_de_l_enfant', 'age') : ''
+  const childSchool = isClassesAvenir ? col('ecole_actuelle', 'ecole') : ''
+  const childLevel = isClassesAvenir ? col('niveau_scolaire', 'niveau') : ''
+  const besoin = isClassesAvenir ? col('besoin_principal', 'besoin') : ''
+
   return {
     _leadId: metaLeadId,
     _createdAt: createdAt,
     _platform: metaPlatform,
     _adName: metaAdName,
-    _objectif: metaObjectif,
+    _objectif: isClassesAvenir ? besoin : metaObjectif,
     _situation: metaSituation,
     _delai: metaDelai,
     _disponibilite: metaDisponibilite,
+    _isClassesAvenir: isClassesAvenir,
+    _childName: childName,
+    _childAge: childAge,
+    _childSchool: childSchool,
+    _childLevel: childLevel,
     firstName,
     lastName,
     phone: formatPhone(metaPhone),
     email: exact('email', 'e-mail'),
     city: metaCity.replace(/^"/, '').replace(/"$/, ''),
     profession: metaSituation,
-    programInterest: metaObjectif,
+    programInterest: isClassesAvenir ? besoin : metaObjectif,
     source: sourceLabel,
     campaign: metaCampaign.replace(/^"/, '').replace(/"$/, ''),
     adSet: exact('adset_name'),
     status,
     interestLevel: interestLevel as any,
     createdAt,
+    programTag: (isClassesAvenir ? 'classes_avenir' : 'coaching_adulte') as 'coaching_adulte' | 'classes_avenir',
   }
 }
 
@@ -264,6 +279,11 @@ export default function ImportLeadsModal({ onClose }: { onClose: () => void }) {
         delai_action: row._delai || null,
         meta_lead_id: row._leadId || null,
         created_at: row._createdAt || undefined,
+        program_tag: row.programTag || null,
+        child_name: (row as any)._childName || null,
+        child_age: (row as any)._childAge || null,
+        child_school: (row as any)._childSchool || null,
+        child_level: (row as any)._childLevel || null,
       }
 
       try {
@@ -362,10 +382,12 @@ export default function ImportLeadsModal({ onClose }: { onClose: () => void }) {
                       { label: 'Nom complet',    k: 'name' },
                       { label: 'Téléphone',      k: null },
                       { label: 'Ville',          k: 'city' },
-                      { label: 'Objectif',       k: 'objectif' },
-                      { label: 'Situation',      k: null },
+                      { label: 'Objectif / Besoin', k: 'objectif' },
+                      { label: 'Enfant',         k: null },
+                      { label: 'Âge',            k: null },
+                      { label: 'École',          k: null },
+                      { label: 'Niveau',         k: null },
                       { label: 'Délai',          k: 'delai' },
-                      { label: 'Disponibilité',  k: null },
                       { label: 'Pub',            k: null },
                     ] as { label: string; k: SortKey | null }[]).map(({ label, k }) => (
                       <th key={label}
@@ -408,13 +430,25 @@ export default function ImportLeadsModal({ onClose }: { onClose: () => void }) {
                       <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap font-mono">{r.phone}</td>
                       {/* City */}
                       <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">{r.city}</td>
-                      {/* Objectif */}
+                      {/* Objectif / Besoin */}
                       <td className="px-3 py-2 text-gray-600 max-w-[130px] truncate" title={formatLabel(r._objectif)}>
                         {formatLabel(r._objectif)}
                       </td>
-                      {/* Situation pro */}
-                      <td className="px-3 py-2 text-gray-600 max-w-[110px] truncate" title={formatLabel(r._situation)}>
-                        {formatLabel(r._situation)}
+                      {/* Enfant */}
+                      <td className="px-3 py-2 text-gray-600 max-w-[100px] truncate" title={(r as any)._childName}>
+                        {(r as any)._childName || <span className="text-gray-300">—</span>}
+                      </td>
+                      {/* Âge */}
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                        {(r as any)._childAge || <span className="text-gray-300">—</span>}
+                      </td>
+                      {/* École */}
+                      <td className="px-3 py-2 text-gray-600 max-w-[100px] truncate" title={(r as any)._childSchool}>
+                        {(r as any)._childSchool || <span className="text-gray-300">—</span>}
+                      </td>
+                      {/* Niveau */}
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                        {(r as any)._childLevel || <span className="text-gray-300">—</span>}
                       </td>
                       {/* Délai */}
                       <td className="px-3 py-2">
@@ -423,10 +457,6 @@ export default function ImportLeadsModal({ onClose }: { onClose: () => void }) {
                             {URGENCY_LABEL[r.interestLevel] || r.interestLevel}
                           </span>
                         ) : <span className="text-gray-400">{formatLabel(r._delai)}</span>}
-                      </td>
-                      {/* Disponibilité */}
-                      <td className="px-3 py-2 text-gray-500 max-w-[100px] truncate" title={formatLabel(r._disponibilite)}>
-                        {formatLabel(r._disponibilite)}
                       </td>
                       {/* Pub */}
                       <td className="px-3 py-2 text-gray-400 max-w-[90px] truncate" title={r._adName}>

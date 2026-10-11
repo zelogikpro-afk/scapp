@@ -63,10 +63,10 @@ function ProgramModal({ program, onClose, onSave }: { program: Program | null; o
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  super_admin: 'Super Admin', admin: 'Admin', sales_agent: 'Agent Commercial', coach: 'Coach', crm_manager: 'Responsable CRM',
+  super_admin: 'Super Admin', admin: 'Admin', sales_agent: 'Agent Commercial', coach: 'Coach', crm_manager: 'Responsable CRM', digital: 'Chargée Digital',
 }
 const ROLE_COLORS: Record<string, any> = {
-  super_admin: 'danger', admin: 'warning', sales_agent: 'info', coach: 'success', crm_manager: 'purple',
+  super_admin: 'danger', admin: 'warning', sales_agent: 'info', coach: 'success', crm_manager: 'purple', digital: 'info',
 }
 
 const TABS = [
@@ -145,6 +145,7 @@ function InviteModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
             <option value="coach">Coach</option>
             <option value="admin">Admin</option>
             <option value="super_admin">Super Admin</option>
+            <option value="digital">Chargée Digital</option>
           </select>
         </div>
         {error && <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{error}</p>}
@@ -192,6 +193,7 @@ function EditUserModal({ user, onClose, onSaved }: { user: ProfileUser; onClose:
             <option value="coach">Coach</option>
             <option value="admin">Admin</option>
             <option value="super_admin">Super Admin</option>
+            <option value="digital">Chargée Digital</option>
           </select>
         </div>
         <div className="flex items-center gap-2">

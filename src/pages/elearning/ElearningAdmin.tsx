@@ -214,9 +214,22 @@ export default function ElearningAdmin() {
       supabaseAdmin.from('announcements').select('*').order('created_at', { ascending: false }),
       supabaseAdmin.from('session_schedule').select('*').order('seance_date'),
     ])
+    // Load doc visibility config from Storage and merge into docs
+    let visConfig: Record<string, { excluded_promotion_ids: string[]; excluded_learner_ids: string[] }> = {}
+    try {
+      const { data: cfgBlob } = await supabaseAdmin.storage.from('elearning').download('config/doc_visibility.json')
+      if (cfgBlob) visConfig = JSON.parse(await cfgBlob.text()) || {}
+    } catch { /* no config yet */ }
+    const rawDocs: ElearningDoc[] = dRes.data || []
+    const mergedDocs = rawDocs.map(d => ({
+      ...d,
+      excluded_promotion_ids: visConfig[d.id]?.excluded_promotion_ids || [],
+      excluded_learner_ids: visConfig[d.id]?.excluded_learner_ids || [],
+    }))
+
     setSessions(sRes.data || [])
     setRecordings(rRes.data || [])
-    setDocs(dRes.data || [])
+    setDocs(mergedDocs)
     setLearners(lRes.data || [])
     setParticipants(pRes.data || [])
     setTestUnlocks(tuRes.data || [])
@@ -1115,15 +1128,21 @@ export default function ElearningAdmin() {
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-2">Fichier PDF</label>
               <label className={`flex flex-col items-center gap-2 border-2 border-dashed rounded-xl p-5 cursor-pointer transition-colors ${uploading ? 'border-blue-300 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/30'}`}>
-                <input type="file" accept="application/pdf" onChange={handleDocFile} disabled={uploading} className="hidden" />
+                <input type="file" accept="application/pdf,video/*" onChange={handleDocFile} disabled={uploading} className="hidden" />
                 {uploading ? (
                   <><div className="w-full bg-gray-200 rounded-full h-2 max-w-xs"><div className="bg-blue-600 h-2 rounded-full" style={{ width: `${uploadPct}%` }} /></div><p className="text-sm text-blue-600">Upload… {uploadPct}%</p></>
                 ) : docModal.file_url ? (
-                  <><FileText className="w-8 h-8 text-green-500" /><p className="text-sm text-green-600 font-medium">PDF uploadé ✓</p><p className="text-xs text-gray-400">Cliquer pour remplacer</p></>
+                  <><FileText className="w-8 h-8 text-green-500" /><p className="text-sm text-green-600 font-medium">Fichier uploadé ✓</p><p className="text-xs text-gray-400">Cliquer pour remplacer</p></>
                 ) : (
-                  <><Upload className="w-8 h-8 text-gray-300" /><p className="text-sm text-gray-500">Uploader un PDF</p></>
+                  <><Upload className="w-8 h-8 text-gray-300" /><p className="text-sm text-gray-500">Uploader un PDF ou une vidéo</p></>
                 )}
               </label>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Ou coller un lien (YouTube, Teams…)</label>
+              <input value={docModal.file_url?.startsWith('http') && !docModal.file_url?.includes('supabase') ? docModal.file_url : ''}
+                onChange={e => setDocModal(f => ({ ...f!, file_url: e.target.value }))}
+                className={inp} placeholder="https://youtube.com/watch?v=..." />
             </div>
             <Field label="Ordre"><input type="number" min={1} value={docModal.order_index || 1} onChange={e => setDocModal(f => ({ ...f!, order_index: parseInt(e.target.value) || 1 }))} className={inp} /></Field>
             <label className="flex items-center gap-2 cursor-pointer">

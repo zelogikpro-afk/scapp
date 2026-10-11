@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Class-based dark mode for Tailwind v4 */
+@variant dark (&:where(.dark, .dark *));
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -52,8 +55,15 @@
     -webkit-font-smoothing: antialiased;
     font-size: 14px;
     line-height: 1.5;
+    transition: background-color 0.2s, color 0.2s;
   }
   #root { min-height: 100vh; }
+
+  /* Dark mode: override CSS vars on html.dark so ALL components respond */
+  html.dark body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
 }
 
 @layer utilities {

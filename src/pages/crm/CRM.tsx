@@ -107,6 +107,7 @@ export default function CRM() {
   const [showImport, setShowImport] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [page, setPage] = useState(1)
+  const [programFilter, setProgramFilter] = useState<'all' | 'coaching_adulte' | 'classes_avenir'>('all')
   const [delaiFilter, setDelaiFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all')
   const [agentFilter, setAgentFilter] = useState('all')
   const [sortKey, setSortKey] = useState<'name' | 'source' | 'status' | 'date' | 'followup' | 'delai'>('date')
@@ -158,7 +159,8 @@ export default function CRM() {
       const matchDate   = inRange(l.createdAt, range)
       const matchDelai  = delaiFilter === 'all' || l.interestLevel === delaiFilter
       const matchAgent  = agentFilter === 'all' || l.assignedTo === agentFilter || (agentFilter === '__unassigned__' && !l.assignedTo)
-      return matchSearch && matchStatus && matchSource && matchDate && matchDelai && matchAgent
+      const matchProgram = programFilter === 'all' || l.programTag === programFilter || (programFilter === 'coaching_adulte' && !l.programTag)
+      return matchSearch && matchStatus && matchSource && matchDate && matchDelai && matchAgent && matchProgram
     })
     return [...base].sort((a, b) => {
       let cmp = 0
@@ -249,6 +251,15 @@ export default function CRM() {
           <option value="high">🔴 Urgent (immédiat)</option>
           <option value="medium">🟠 Moyen (1-3 mois)</option>
           <option value="low">🟢 Plus tard</option>
+        </select>
+        <select
+          value={programFilter}
+          onChange={e => { setProgramFilter(e.target.value as any); setPage(1) }}
+          className="text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">Toutes les formations</option>
+          <option value="coaching_adulte">🎓 Formation Coach de Vie</option>
+          <option value="classes_avenir">🏫 Les Classes de l'Avenir</option>
         </select>
         <select
           value={agentFilter}

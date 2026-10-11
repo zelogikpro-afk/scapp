@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { supabaseAdmin } from '../../lib/supabase'
+import { learnerApi } from '../../lib/learnerApi'
 import { type LearnerSession } from '../../lib/learnerSession'
 import { Plus, Pencil, Trash2, Save, X, BookOpen, Target, Check } from 'lucide-react'
 
@@ -28,41 +28,33 @@ export default function EspaceNotes() {
 
   async function load() {
     setLoading(true)
-    const [nRes, cRes] = await Promise.all([
-      supabaseAdmin.from('learner_notes').select('*').eq('learner_id', session.id).order('updated_at', { ascending: false }),
-      supabaseAdmin.from('learner_commitments').select('*').eq('learner_id', session.id).order('created_at', { ascending: false }),
-    ])
-    setNotes(nRes.data || [])
-    setCommitments(cRes.data || [])
+    const data = await learnerApi.getNotes() as any
+    setNotes(data.notes || [])
+    setCommitments(data.commitments || [])
     setLoading(false)
   }
 
   async function saveNote() {
     if (!editingNote?.content?.trim()) return
     setSavingNote(true)
-    const now = new Date().toISOString()
-    if (editingNote.id) {
-      await supabaseAdmin.from('learner_notes').update({ title: editingNote.title || '', content: editingNote.content, updated_at: now }).eq('id', editingNote.id)
-    } else {
-      await supabaseAdmin.from('learner_notes').insert({ learner_id: session.id, title: editingNote.title || '', content: editingNote.content, created_at: now, updated_at: now })
-    }
+    await learnerApi.saveNote({ id: editingNote.id, title: editingNote.title || '', content: editingNote.content })
     setSavingNote(false); setEditingNote(null); await load()
   }
 
   async function deleteNote(id: string) {
     if (!confirm('Supprimer cette note ?')) return
-    await supabaseAdmin.from('learner_notes').delete().eq('id', id); await load()
+    await learnerApi.deleteNote(id); await load()
   }
 
   async function addCommitment() {
     if (!newCommitment.trim()) return
     setSavingC(true)
-    await supabaseAdmin.from('learner_commitments').insert({ learner_id: session.id, commitment: newCommitment.trim(), seance_ref: newSeance.trim() })
+    await learnerApi.addCommitment({ commitment: newCommitment.trim(), seanceRef: newSeance.trim() })
     setSavingC(false); setNewCommitment(''); setNewSeance(''); await load()
   }
 
   async function deleteCommitment(id: string) {
-    await supabaseAdmin.from('learner_commitments').delete().eq('id', id)
+    await learnerApi.deleteCommitment(id)
     setCommitments(prev => prev.filter(c => c.id !== id))
   }
 

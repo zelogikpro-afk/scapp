@@ -1,15 +1,22 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useNavigate, NavLink, useLocation } from 'react-router-dom'
-import { Home, PlayCircle, FileText, FlaskConical, BookOpen, Award, LogOut, Menu, X } from 'lucide-react'
-import { getLearnerSession, clearLearnerSession, type LearnerSession } from '../../lib/learnerSession'
+import { Home, PlayCircle, FileText, FlaskConical, BookOpen, Award, LogOut, Menu, X, Target, User, Headphones, GraduationCap } from 'lucide-react'
+import { getLearnerSession, setLearnerSession, clearLearnerSession, type LearnerSession } from '../../lib/learnerSession'
+import { learnerApiCall, learnerApi } from '../../lib/learnerApi'
 
-const NAV = [
-  { path: '/espace/accueil',         label: 'Accueil',         icon: Home },
-  { path: '/espace/enregistrements', label: 'Enregistrements', icon: PlayCircle },
-  { path: '/espace/documents',       label: 'Documents',       icon: FileText },
-  { path: '/espace/tests',           label: 'Tests',           icon: FlaskConical },
-  { path: '/espace/notes',           label: 'Notes',           icon: BookOpen },
-  { path: '/espace/certificat',      label: 'Certificat',      icon: Award },
+const BETA_USERNAMES = ['a.successcompass']
+
+const NAV_BASE = [
+  { path: '/espace/accueil',         label: 'Accueil',          icon: Home,          beta: false },
+  { path: '/espace/enregistrements', label: 'Enregistrements',  icon: PlayCircle,    beta: false },
+  { path: '/espace/documents',       label: 'Ressources',       icon: FileText,      beta: false },
+  { path: '/espace/tests',           label: 'Tests',            icon: FlaskConical,  beta: false },
+  { path: '/espace/objectifs',       label: 'Mes objectifs',    icon: Target,        beta: false },
+  { path: '/espace/notes',           label: 'Notes',            icon: BookOpen,      beta: false },
+  { path: '/espace/certificat',      label: 'Certificat',       icon: Award,         beta: false },
+  { path: '/espace/coaching',             label: 'Coaching',        icon: Headphones,   beta: true },
+  { path: '/espace/inscription-niveau',  label: 'Niveau suivant',  icon: GraduationCap, beta: true },
+  { path: '/espace/profil',              label: 'Mon profil',       icon: User,          beta: false },
 ]
 
 export default function EspaceLayout() {
@@ -20,19 +27,48 @@ export default function EspaceLayout() {
 
   useEffect(() => {
     const s = getLearnerSession()
-    if (!s) { navigate('/espace', { replace: true }); return }
-    setSession(s)
+    if (!s) { navigate('/espace/login', { replace: true }); return }
+    // Enrich if allPromotionIds or participantId missing (old session)
+    if (!s.allPromotionIds?.length || !s.participantId) {
+      enrichSession(s)
+    } else {
+      setSession(s)
+    }
   }, [])
+
+  useEffect(() => {
+    if (!session) return
+    learnerApi.logActivity(location.pathname.replace('/espace/', ''), 'page_view')
+  }, [location.pathname, session?.id])
+
+  async function enrichSession(s: LearnerSession) {
+    try {
+      const data = await learnerApiCall<{ acc: any; allPromotionIds: string[]; allLevels: string[] }>({ action: 'get_profile' })
+      const enriched: LearnerSession = {
+        ...s,
+        participantId: data.acc?.participant_id || s.participantId,
+        allPromotionIds: data.allPromotionIds,
+        allLevels: data.allLevels,
+        formationLevel: data.allLevels[data.allLevels.length - 1] || s.formationLevel,
+      }
+      setLearnerSession(enriched)
+      setSession(enriched)
+    } catch {
+      clearLearnerSession()
+      navigate('/espace/login', { replace: true })
+    }
+  }
 
   function logout() {
     clearLearnerSession()
-    navigate('/espace')
+    navigate('/espace/login')
   }
 
   if (!session) return null
 
   const initials = session.participantName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-  const levelLabel = session.formationLevel === 'N1' ? 'Niveau 1' : session.formationLevel === 'N2' ? 'Niveau 2' : 'Niveau 3'
+  const levels = session.allLevels?.length ? session.allLevels : [session.formationLevel]
+  const levelLabel = levels.map(l => l === 'N1' ? 'Niveau 1' : l === 'N2' ? 'Niveau 2' : 'Niveau 3').join(' · ')
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -58,7 +94,7 @@ export default function EspaceLayout() {
         </div>
 
         <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
-          {NAV.map(({ path, label, icon: Icon }) => (
+          {NAV_BASE.filter(n => !n.beta || BETA_USERNAMES.includes(session.username)).map(({ path, label, icon: Icon }) => (
             <NavLink key={path} to={path} onClick={() => setSidebarOpen(false)}
               className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
               {({ isActive }) => (<><Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />{label}</>)}
@@ -84,7 +120,7 @@ export default function EspaceLayout() {
             <Menu className="w-5 h-5" />
           </button>
           <span className="font-semibold text-gray-900 text-sm flex-1">
-            {NAV.find(n => n.path === location.pathname)?.label || 'Mon Espace'}
+            {NAV_BASE.find(n => n.path === location.pathname)?.label || 'Mon Espace'}
           </span>
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-bold text-xs">
             {initials}

@@ -4,9 +4,11 @@ import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { useAppStore } from '../../store/appStore'
 import { COHORTS, TRAINING_PROGRAMS } from '../../lib/mockData'
+import toast from 'react-hot-toast'
 
 export default function AddParticipantModal({ onClose }: { onClose: () => void }) {
   const { addParticipant, participants } = useAppStore()
+  const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', phone: '', whatsapp: '',
     gender: 'female' as const, birthDate: '', cin: '', address: '',
@@ -16,13 +18,21 @@ export default function AddParticipantModal({ onClose }: { onClose: () => void }
     promotionId: '', reference: '',
   })
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const year = new Date().getFullYear()
-    const nextNum = (participants.length + 1).toString().padStart(3, '0')
-    const ref = form.reference || `SC-${year}-${nextNum}`
-    addParticipant({ ...form, isActive: true, reference: ref, promotionId: form.promotionId || undefined })
-    onClose()
+    setSaving(true)
+    try {
+      const year = new Date().getFullYear()
+      const nextNum = (participants.length + 1).toString().padStart(3, '0')
+      const ref = form.reference || `SC-${year}-${nextNum}`
+      await addParticipant({ ...form, isActive: true, reference: ref, promotionId: form.promotionId || undefined })
+      toast.success('Participant créé ✅')
+      onClose()
+    } catch (err: any) {
+      toast.error('Erreur : ' + (err?.message || 'impossible de créer le participant'))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
@@ -32,8 +42,8 @@ export default function AddParticipantModal({ onClose }: { onClose: () => void }
     <Modal open onClose={onClose} title="Nouveau participant" size="lg"
       footer={
         <>
-          <Button variant="outline" onClick={onClose}>Annuler</Button>
-          <Button variant="primary" onClick={handleSubmit}>Créer le participant</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Annuler</Button>
+          <Button variant="primary" onClick={handleSubmit} disabled={saving}>{saving ? 'Enregistrement…' : 'Créer le participant'}</Button>
         </>
       }
     >

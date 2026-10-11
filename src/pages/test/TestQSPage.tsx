@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import {
   QS_QUESTIONS, QS_ANSWERS, QS_PILIER_ORDER,
@@ -21,6 +21,23 @@ export default function TestQSPage() {
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [saving, setSaving]   = useState(false)
   const [downloading, setDL]  = useState(false)
+  const [fromSession, setFromSession] = useState(false)
+  const [participantId, setParticipantId] = useState<string | null>(null)
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('sc_learner_session')
+      if (!raw) return
+      const s = JSON.parse(raw)
+      const parts = (s.participantName || '').trim().split(' ')
+      setFirst(parts[0] || '')
+      setLast(parts.slice(1).join(' ') || '')
+      setEmail(s.email || '')
+      setPhone(s.phone || '')
+      setParticipantId(s.participantId || null)
+      setFromSession(true)
+    } catch { /* ignore */ }
+  }, [])
   const reportRef = useRef<HTMLDivElement>(null)
 
   const answered    = Object.keys(answers).length
@@ -52,6 +69,7 @@ export default function TestQSPage() {
 
     await supabase.from('test_results').insert({
       test_type:        'qs',
+      participant_id:   participantId,
       first_name:       firstName,
       last_name:        lastName,
       email:            email || null,
@@ -118,7 +136,7 @@ export default function TestQSPage() {
             </div>
           ))}
         </div>
-        <button onClick={() => setStep('info')} style={{
+        <button onClick={() => setStep(fromSession ? 'questions' : 'info')} style={{
           width: '100%', padding: '14px 0', background: NAVY, color: '#fff',
           borderRadius: 12, border: 'none', fontSize: 16, fontWeight: 700, cursor: 'pointer',
         }}>
@@ -225,13 +243,16 @@ export default function TestQSPage() {
       </div>
 
       {/* Submit button */}
-      {allAnswered && (
-        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '16px 24px', background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'center' }}>
-          <button onClick={submit} disabled={saving} style={{ padding: '14px 48px', background: NAVY, color: '#fff', borderRadius: 14, border: 'none', fontSize: 16, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '16px 24px', background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)', borderTop: '1px solid #e5e7eb' }}>
+        <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#f59e0b', visibility: allAnswered ? 'hidden' : 'visible', margin: 0 }}>
+            {total - answered} question{total - answered > 1 ? 's' : ''} restante{total - answered > 1 ? 's' : ''}
+          </p>
+          <button onClick={submit} disabled={!allAnswered || saving} style={{ padding: '14px 48px', background: allAnswered ? NAVY : '#d1d5db', color: '#fff', borderRadius: 14, border: 'none', fontSize: 16, fontWeight: 700, cursor: allAnswered && !saving ? 'pointer' : 'not-allowed', opacity: saving ? 0.7 : 1 }}>
             {saving ? 'Enregistrement…' : 'Voir mes résultats →'}
           </button>
         </div>
-      )}
+      </div>
     </div>
   )
 
@@ -258,7 +279,7 @@ export default function TestQSPage() {
         </div>
 
         {/* All 13 piliers */}
-        <div style={{ background: '#fff', borderRadius: 16, padding: '24px 28px', marginBottom: 24, boxShadow: '0 1px 6px rgba(0,0,0,0.07)' }}>
+        {!fromSession && <div style={{ background: '#fff', borderRadius: 16, padding: '24px 28px', marginBottom: 24, boxShadow: '0 1px 6px rgba(0,0,0,0.07)' }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 20 }}>Vos 13 piliers de succès</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {QS_PILIER_ORDER.map(pilier => {
@@ -286,7 +307,7 @@ export default function TestQSPage() {
               )
             })}
           </div>
-        </div>
+        </div>}
 
         {/* Download */}
         <div style={{ textAlign: 'center' }}>

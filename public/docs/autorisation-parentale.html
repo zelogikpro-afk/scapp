@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Autorisation parentale — Classes de l'Avenir</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamont:ital,wght@0,400;0,600;0,700;1,400&family=Crimson+Pro:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 15px; }
+  body {
+    background: #edeae4;
+    color: #1c1917;
+    font-family: 'Crimson Pro', Georgia, serif;
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+  }
+
+  .print-bar {
+    max-width: 720px;
+    margin: 0 auto 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .print-bar-label {
+    font-family: 'Cormorant Garamont', serif;
+    font-weight: 600;
+    font-size: 1rem;
+    color: #1e2d5a;
+    letter-spacing: .03em;
+  }
+  .btn-print {
+    background: #1e2d5a;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 20px;
+    font-family: 'Crimson Pro', serif;
+    font-size: .95rem;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: .02em;
+    transition: background .15s;
+  }
+  .btn-print:hover { background: #14532d; }
+
+  .page {
+    background: #fafaf8;
+    box-shadow: 0 2px 12px rgba(0,0,0,.10), 0 1px 3px rgba(0,0,0,.06);
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 56px 64px;
+  }
+
+  .letterhead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding-bottom: 20px;
+    border-bottom: 2.5px solid #1e2d5a;
+    margin-bottom: 28px;
+    gap: 16px;
+  }
+  .lh-org { font-family: 'Cormorant Garamont', serif; font-weight: 700; font-size: 1.25rem; color: #1e2d5a; line-height: 1.2; }
+  .lh-prog { font-family: 'Cormorant Garamont', serif; font-style: italic; font-size: 1rem; color: #14532d; margin-top: 3px; }
+  .lh-contact { font-size: .82rem; color: #6b6560; text-align: right; line-height: 1.7; }
+
+  .doc-title { font-family: 'Cormorant Garamont', serif; font-weight: 700; font-size: 1.55rem; color: #1e2d5a; text-align: center; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 6px; }
+  .doc-subtitle { font-family: 'Cormorant Garamont', serif; font-style: italic; font-size: 1rem; color: #14532d; text-align: center; margin-bottom: 28px; }
+
+  hr { border: none; border-top: 1px solid #d4cfc8; margin: 22px 0; }
+
+  .field-grid { display: grid; gap: 14px 24px; margin-bottom: 18px; }
+  .field-grid.two { grid-template-columns: 1fr 1fr; }
+  .field-grid.one { grid-template-columns: 1fr; }
+  .field { display: flex; flex-direction: column; gap: 3px; }
+  .field-label { font-size: .8rem; font-weight: 600; color: #6b6560; letter-spacing: .07em; text-transform: uppercase; }
+  .field-line { border-bottom: 1px solid #d4cfc8; height: 26px; }
+  .field-line.tall { height: 48px; }
+
+  .intro-text { font-size: .97rem; color: #1c1917; margin-bottom: 18px; line-height: 1.75; }
+  .bold-inline { font-weight: 600; }
+
+  .sig-block { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 28px; }
+  .sig-item { display: flex; flex-direction: column; gap: 8px; }
+  .sig-label { font-size: .78rem; font-weight: 600; color: #6b6560; letter-spacing: .06em; text-transform: uppercase; }
+  .sig-line { border-bottom: 1px solid #d4cfc8; height: 72px; }
+
+  .doc-footer { border-top: 1px solid #d4cfc8; margin-top: 36px; padding-top: 12px; display: flex; justify-content: space-between; font-size: .77rem; color: #6b6560; }
+
+  @media print {
+    @page { size: A4; margin: 18mm 16mm; }
+    body { background: white; padding: 0; }
+    .print-bar { display: none; }
+    .page { box-shadow: none; max-width: 100%; padding: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="print-bar">
+  <span class="print-bar-label">Classes de l'Avenir — Autorisation parentale</span>
+  <button class="btn-print" onclick="window.print()">⎙ Imprimer / Enregistrer en PDF</button>
+</div>
+
+<main class="page">
+
+  <header class="letterhead">
+    <div>
+      <div class="lh-org">Success Compass Academy</div>
+      <div class="lh-prog">Les Classes de l'Avenir</div>
+    </div>
+    <div class="lh-contact">contact@scapp.ma<br>06 03 60 97 92</div>
+  </header>
+
+  <h1 class="doc-title">Autorisation parentale</h1>
+  <p class="doc-subtitle">À compléter par le représentant légal du participant mineur (12–17 ans)</p>
+
+  <hr>
+
+  <p class="intro-text">Je soussigné(e) :</p>
+
+  <div class="field-grid two">
+    <div class="field"><span class="field-label">Nom et prénom du représentant légal</span><div class="field-line"></div></div>
+    <div class="field"><span class="field-label">Lien avec le participant</span><div class="field-line"></div></div>
+    <div class="field"><span class="field-label">Téléphone</span><div class="field-line"></div></div>
+    <div class="field"><span class="field-label">E-mail</span><div class="field-line"></div></div>
+  </div>
+
+  <p class="intro-text">autorise mon enfant :</p>
+
+  <div class="field-grid two">
+    <div class="field"><span class="field-label">Nom et prénom du participant</span><div class="field-line"></div></div>
+    <div class="field"><span class="field-label">Date de naissance</span><div class="field-line"></div></div>
+  </div>
+
+  <p class="intro-text">
+    à participer au programme <span class="bold-inline">Les Classes de l'Avenir</span>, organisé par Success Compass Academy, dans le cadre de ses activités de formation et de coaching.
+  </p>
+
+  <p class="intro-text">
+    Je reconnais avoir pris connaissance de la nature du programme et de ses objectifs, notamment le développement personnel, la confiance en soi, la communication, l'orientation, la construction d'une vision de l'avenir et la préparation à la réussite personnelle, scolaire et professionnelle.
+  </p>
+
+  <p class="intro-text">
+    J'autorise mon enfant à participer aux activités pédagogiques, exercices, mises en situation, ateliers et projets proposés dans le cadre du programme.
+  </p>
+
+  <p class="intro-text">
+    Je m'engage à communiquer à Success Compass Academy toute information utile concernant la participation de mon enfant aux activités.
+  </p>
+
+  <hr>
+
+  <div class="field-grid two">
+    <div class="field"><span class="field-label">Nom et prénom du représentant légal</span><div class="field-line"></div></div>
+    <div class="field"><span class="field-label">Date</span><div class="field-line"></div></div>
+  </div>
+
+  <div style="margin-top: 24px;">
+    <div class="sig-item" style="max-width: 360px;">
+      <span class="sig-label">Signature précédée de la mention « Lu et approuvé »</span>
+      <div class="sig-line"></div>
+    </div>
+  </div>
+
+  <footer class="doc-footer">
+    <span>Success Compass Academy · contact@scapp.ma</span>
+    <span>Autorisation parentale — Classes de l'Avenir</span>
+  </footer>
+
+</main>
+</body>
+</html>

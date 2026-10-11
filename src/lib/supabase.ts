@@ -12,13 +12,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 // Admin client — bypasses all RLS. Must NOT persist or share session with the anon client.
-export const supabaseAdmin = createClient(supabaseUrl, SERVICE_KEY, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-    detectSessionInUrl: false,
-  },
-  global: {
-    headers: { Authorization: `Bearer ${SERVICE_KEY}` },
-  },
-})
+// Falls back to the anon client if the service key is not configured.
+export const supabaseAdmin = SERVICE_KEY
+  ? createClient(supabaseUrl, SERVICE_KEY, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+      global: {
+        headers: { Authorization: `Bearer ${SERVICE_KEY}` },
+      },
+    })
+  : supabase

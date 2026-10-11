@@ -9,7 +9,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const { login } = useAuthStore()
+  const { login, user } = useAuthStore()
   const navigate = useNavigate()
 
   async function handleSubmit(e: React.FormEvent) {
@@ -19,7 +19,9 @@ export default function Login() {
     const result = await login(email, password)
     setLoading(false)
     if (result.ok) {
-      navigate('/')
+      const { user: u } = useAuthStore.getState()
+      if (u?.role === 'digital') navigate('/digital/accueil')
+      else navigate('/')
     } else {
       setError(result.error || 'Email ou mot de passe incorrect.')
     }

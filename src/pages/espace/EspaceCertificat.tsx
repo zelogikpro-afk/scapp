@@ -1,33 +1,38 @@
 import { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { supabaseAdmin } from '../../lib/supabase'
+import { learnerApi } from '../../lib/learnerApi'
 import { type LearnerSession } from '../../lib/learnerSession'
-import { Award, CheckCircle, Lock, Download } from 'lucide-react'
+import { Award, Calendar, CheckCircle } from 'lucide-react'
+
+interface QuizResult {
+  test_type: string
+  created_at: string
+  scores: Record<string, number> | null
+}
+
+const LEVEL_META: Record<string, { label: string; gradient: string; badge: string }> = {
+  quiz_coach:    { label: 'Coach de Vie & Développement Personnel — Niveau 1', gradient: 'from-blue-600 to-indigo-700',   badge: 'N1' },
+  quiz_coach_n2: { label: 'Master Coach Thérapeute — Niveau 2',                gradient: 'from-purple-600 to-indigo-700', badge: 'N2' },
+  quiz_coach_n3: { label: 'Master Coach Consultant — Niveau 3',                gradient: 'from-amber-600 to-orange-700',  badge: 'N3' },
+}
 
 export default function EspaceCertificat() {
   const session = useOutletContext<LearnerSession>()
-  const [progress, setProgress] = useState(0)
-  const [total, setTotal] = useState(0)
+  const [results, setResults] = useState<QuizResult[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { load() }, [])
 
   async function load() {
-    const [modRes, lesRes, progRes] = await Promise.all([
-      supabaseAdmin.from('elearning_modules').select('id').eq('formation_level', session.formationLevel).eq('is_published', true),
-      supabaseAdmin.from('elearning_lessons').select('id, module_id').eq('is_published', true),
-      supabaseAdmin.from('lesson_progress').select('lesson_id').eq('learner_id', session.id),
-    ])
-    const modIds = new Set((modRes.data || []).map((m: any) => m.id))
-    const myLessons = (lesRes.data || []).filter((l: any) => modIds.has(l.module_id))
-    const completedIds = new Set((progRes.data || []).map((p: any) => p.lesson_id))
-    setTotal(myLessons.length)
-    setProgress(myLessons.filter((l: any) => completedIds.has(l.id)).length)
+    setLoading(true)
+    const quizTypes = ['quiz_coach', 'quiz_coach_n2', 'quiz_coach_n3']
+    const all = await learnerApi.getCertif({
+      participantId: session.participantId || null,
+      participantName: session.participantName,
+    }) as any[]
+    setResults((all || []).filter(r => quizTypes.includes(r.test_type)))
     setLoading(false)
   }
-
-  const pct = total > 0 ? Math.round((progress / total) * 100) : 0
-  const eligible = pct === 100
 
   if (loading) return <div className="text-center py-20 text-gray-400">Chargement…</div>
 
@@ -36,67 +41,58 @@ export default function EspaceCertificat() {
       <div className="bg-white rounded-2xl border border-gray-100 p-6">
         <div className="flex items-center gap-3 mb-1">
           <Award className="w-5 h-5 text-yellow-500" />
-          <h1 className="text-xl font-bold text-gray-900">Mon certificat</h1>
+          <h1 className="text-xl font-bold text-gray-900">Mes certificats</h1>
         </div>
-        <p className="text-sm text-gray-500">Success Compass Academy</p>
+        <p className="text-sm text-gray-500">Obtenus après validation du quiz final de chaque niveau</p>
       </div>
 
-      {eligible ? (
-        <div className="bg-white rounded-2xl border border-green-200 p-8 text-center space-y-4">
-          <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto">
-            <Award className="w-10 h-10 text-green-600" />
+      {results.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
+          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+            <Award className="w-8 h-8 text-gray-400" />
           </div>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Félicitations !</h2>
-            <p className="text-gray-600 mt-1">{session.participantName}</p>
-            <p className="text-sm text-gray-500 mt-0.5">
-              {session.formationLevel === 'N1' ? 'Coach de vie et Développement Personnel — Niveau 1'
-                : session.formationLevel === 'N2' ? 'Master Coach Thérapeute — Niveau 2'
-                : 'Master Coach Consultant — Niveau 3'}
-            </p>
-          </div>
-          <div className="flex items-center justify-center gap-2 text-green-600">
-            <CheckCircle className="w-5 h-5" />
-            <span className="font-medium">Formation complète — {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-          </div>
-          <button className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors">
-            <Download className="w-4 h-4" /> Télécharger le certificat
-          </button>
-          <p className="text-xs text-gray-400">Le certificat PDF sera généré automatiquement</p>
+          <h2 className="text-lg font-semibold text-gray-700">Aucun certificat pour l'instant</h2>
+          <p className="text-sm text-gray-400 mt-1">Votre certificat apparaîtra ici après validation du quiz final</p>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="p-6 text-center">
-            <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-              <Lock className="w-10 h-10 text-gray-400" />
-            </div>
-            <h2 className="text-lg font-semibold text-gray-900">Certificat verrouillé</h2>
-            <p className="text-sm text-gray-500 mt-1">Terminez tous les modules pour débloquer votre certificat</p>
-          </div>
+        <div className="space-y-4">
+          {results.map(r => {
+            const meta = LEVEL_META[r.test_type] || { label: r.test_type, gradient: 'from-blue-600 to-indigo-700', badge: '' }
+            const date = new Date(r.created_at)
+            return (
+              <div key={r.test_type} className={`bg-gradient-to-br ${meta.gradient} rounded-2xl p-6 text-white shadow-lg`}>
+                <div className="flex items-start justify-between mb-4">
+                  <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                    <Award className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold bg-white/20 px-3 py-1 rounded-full">{meta.badge}</span>
+                    <span className="flex items-center gap-1 text-xs bg-green-400/30 text-white px-2 py-1 rounded-full">
+                      <CheckCircle className="w-3 h-3" /> Validé
+                    </span>
+                  </div>
+                </div>
 
-          <div className="px-6 pb-6">
-            <div className="bg-gray-50 rounded-xl p-4">
-              <div className="flex justify-between text-sm mb-2">
-                <span className="text-gray-600 font-medium">Progression</span>
-                <span className="text-blue-600 font-bold">{pct}%</span>
-              </div>
-              <div className="bg-gray-200 rounded-full h-3">
-                <div className="bg-blue-600 h-3 rounded-full transition-all" style={{ width: `${pct}%` }} />
-              </div>
-              <p className="text-xs text-gray-400 mt-2 text-center">{progress} / {total} leçons terminées</p>
-            </div>
+                <p className="text-white/70 text-xs mb-0.5">Certificat délivré à</p>
+                <h2 className="text-xl font-bold text-white mb-4">{session.participantName}</h2>
 
-            <div className="mt-4 space-y-2 text-sm text-gray-500">
-              <div className={`flex items-center gap-2 ${pct === 100 ? 'text-green-600' : ''}`}>
-                {pct === 100 ? <CheckCircle className="w-4 h-4" /> : <div className="w-4 h-4 rounded-full border-2 border-gray-300" />}
-                <span>Terminer tous les modules de cours</span>
+                <div className="bg-white/20 rounded-xl p-4">
+                  <p className="text-white/70 text-xs mb-1">Formation certifiée</p>
+                  <p className="text-white font-bold text-base">{meta.label}</p>
+                </div>
+
+                <div className="mt-3 flex items-center gap-2 text-white/80 text-sm">
+                  <Calendar className="w-4 h-4 flex-shrink-0" />
+                  <span>Quiz validé le {date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-white/20">
+                  <p className="text-white/60 text-xs">Délivré par</p>
+                  <p className="text-white text-sm font-medium">Sofya EL QOUASSI — Master Trainer</p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
-                <span>Réussir le quiz de fin de formation</span>
-              </div>
-            </div>
-          </div>
+            )
+          })}
         </div>
       )}
     </div>

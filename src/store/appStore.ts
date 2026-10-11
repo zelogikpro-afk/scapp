@@ -104,6 +104,11 @@ function mapLead(row: any): Lead {
     horairePreference: row.horaire_preference,
     delaiAction: row.delai_action,
     metaLeadId: row.meta_lead_id,
+    programTag: row.program_tag,
+    childName: row.child_name,
+    childAge: row.child_age,
+    childSchool: row.child_school,
+    childLevel: row.child_level,
     genre: row.genre, dateNaissance: row.date_naissance,
     adresse: row.adresse, cin: row.cin,
     modaliteParticipation: row.modalite_participation,
@@ -209,10 +214,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   fetchParticipants: async () => {
-    const { data } = await supabase
+    const { data } = await supabaseAdmin
       .from('participants')
       .select('*')
-      .eq('is_active', true)
       .order('created_at', { ascending: false })
     if (data) set({ participants: data.map(mapParticipant) })
   },
@@ -358,15 +362,29 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   addParticipant: async (data) => {
-    const { data: row } = await supabase.from('participants').insert({
-      first_name: data.firstName, last_name: data.lastName,
-      email: data.email, phone: data.phone, whatsapp: data.whatsapp,
-      gender: data.gender, birth_date: data.birthDate, cin: data.cin,
-      address: data.address, profession: data.profession, company: data.company,
-      emergency_contact: data.emergencyContact, type: data.type,
-      notes: data.notes, tags: data.tags, is_active: data.isActive,
-      lead_id: data.leadId,
+    const { data: row, error: insertError } = await supabaseAdmin.from('participants').insert({
+      first_name: data.firstName,
+      last_name: data.lastName,
+      email: data.email || null,
+      phone: data.phone || null,
+      whatsapp: data.whatsapp || null,
+      gender: data.gender || null,
+      birth_date: data.birthDate || null,
+      cin: data.cin || null,
+      address: data.address || null,
+      profession: data.profession || null,
+      company: data.company || null,
+      emergency_contact: data.emergencyContact || null,
+      type: data.type,
+      notes: data.notes || '',
+      tags: data.tags || [],
+      is_active: data.isActive ?? true,
+      lead_id: data.leadId || null,
     }).select().single()
+    if (insertError) {
+      console.error('❌ addParticipant error:', insertError)
+      throw new Error(insertError.message)
+    }
     if (row) set(s => ({ participants: [mapParticipant(row), ...s.participants] }))
   },
 
@@ -390,19 +408,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (updates.isActive !== undefined) patch.is_active = updates.isActive
     if (updates.promotionId !== undefined) patch.promotion_id = updates.promotionId
     if (updates.reference !== undefined) patch.reference = updates.reference
-    await supabase.from('participants').update(patch).eq('id', id)
+    await supabaseAdmin.from('participants').update(patch).eq('id', id)
     set(s => ({
       participants: s.participants.map(p => p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p)
     }))
   },
 
   deleteParticipant: async (id) => {
-    await supabase.from('participants').delete().eq('id', id)
+    await supabaseAdmin.from('participants').delete().eq('id', id)
     set(s => ({ participants: s.participants.filter(p => p.id !== id) }))
   },
 
   convertLeadToParticipant: async (lead) => {
-    const { data: row } = await supabase.from('participants').insert({
+    const { data: row } = await supabaseAdmin.from('participants').insert({
       first_name: lead.firstName, last_name: lead.lastName,
       email: lead.email ?? '', phone: lead.phone, whatsapp: lead.whatsapp,
       gender: 'female',
@@ -423,10 +441,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   addPayment: async (data) => {
-    const { data: row } = await supabase.from('payments').insert({
+    const { data: row } = await supabaseAdmin.from('payments').insert({
       participant_id: data.participantId, participant_name: data.participantName,
       program_type: data.programType, program_name: data.programName,
       total_amount: data.totalAmount, amount_paid: data.amountPaid,
+      remaining_amount: data.totalAmount - data.amountPaid,
       status: data.status, method: data.method, reference: data.reference,
       date: data.date, due_date: data.dueDate, notes: data.notes,
     }).select('*, installments(*)').single()
@@ -434,7 +453,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deletePayment: async (id) => {
-    await supabase.from('payments').delete().eq('id', id)
+    await supabaseAdmin.from('payments').delete().eq('id', id)
     set(s => ({ payments: s.payments.filter(p => p.id !== id) }))
   },
 
@@ -452,7 +471,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (updates.reference !== undefined) patch.reference = updates.reference
     if (updates.session !== undefined) patch.session = updates.session
     if (updates.participantName !== undefined) patch.participant_name = updates.participantName
-    await supabase.from('payments').update(patch).eq('id', id)
+    if (updates.totalAmount !== undefined || updates.amountPaid !== undefined) {
+      const cur = get().payments.find(p => p.id === id)
+      const total = updates.totalAmount ?? cur?.totalAmount ?? 0
+      const paid = updates.amountPaid ?? cur?.amountPaid ?? 0
+      patch.remaining_amount = total - paid
+    }
+    await supabaseAdmin.from('payments').update(patch).eq('id', id)
     set(s => ({
       payments: s.payments.map(p => p.id === id ? { ...p, ...updates, remainingAmount: (updates.totalAmount ?? p.totalAmount) - (updates.amountPaid ?? p.amountPaid) } : p)
     }))

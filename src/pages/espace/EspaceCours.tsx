@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { supabaseAdmin } from '../../lib/supabase'
+import { learnerApi } from '../../lib/learnerApi'
 import { type LearnerSession } from '../../lib/learnerSession'
 import { ChevronDown, ChevronRight, CheckCircle, PlayCircle, FileText, BookOpen, Clock, Lock } from 'lucide-react'
+import VideoWatermark from '../../components/ui/VideoWatermark'
 
 interface Module { id: string; title: string; description: string; formation_level: string; order_index: number; is_published: boolean }
 interface Lesson { id: string; module_id: string; title: string; type: string; content_url: string; content_text: string; duration_minutes: number; order_index: number; is_published: boolean }
@@ -33,22 +34,19 @@ export default function EspaceCours() {
 
   async function load() {
     setLoading(true)
-    const [modRes, lesRes, progRes] = await Promise.all([
-      supabaseAdmin.from('elearning_modules').select('*').eq('formation_level', session.formationLevel).eq('is_published', true).order('order_index'),
-      supabaseAdmin.from('elearning_lessons').select('*').eq('is_published', true).order('order_index'),
-      supabaseAdmin.from('lesson_progress').select('lesson_id').eq('learner_id', session.id),
-    ])
-    setModules(modRes.data || [])
-    setLessons(lesRes.data || [])
-    setProgress(new Set((progRes.data || []).map((r: any) => r.lesson_id)))
-    if (modRes.data?.length) setExpanded(new Set([modRes.data[0].id]))
+    const data = await learnerApi.getCours({ formationLevel: session.formationLevel }) as any
+    const mods = data.modules || []
+    setModules(mods)
+    setLessons(data.lessons || [])
+    setProgress(new Set((data.progress || []).map((r: any) => r.lesson_id)))
+    if (mods.length) setExpanded(new Set([mods[0].id]))
     setLoading(false)
   }
 
   async function markComplete(lesson: Lesson) {
     if (progress.has(lesson.id)) return
     setMarking(true)
-    await supabaseAdmin.from('lesson_progress').upsert({ learner_id: session.id, lesson_id: lesson.id })
+    await learnerApi.completeLesson(lesson.id)
     setProgress(prev => new Set([...prev, lesson.id]))
     setMarking(false)
   }
@@ -107,17 +105,23 @@ export default function EspaceCours() {
               return (
                 <div>
                   {ytId ? (
-                    <div className="aspect-video w-full rounded-xl overflow-hidden bg-black">
-                      <iframe src={`https://www.youtube.com/embed/${ytId}?rel=0`}
-                        className="w-full h-full" allowFullScreen
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
-                    </div>
+                    <VideoWatermark name={session.participantName} email={session.email}>
+                      <div className="aspect-video w-full rounded-xl overflow-hidden bg-black">
+                        <iframe src={`https://www.youtube.com/embed/${ytId}?rel=0&modestbranding=1`}
+                          className="w-full h-full"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
+                      </div>
+                    </VideoWatermark>
                   ) : isNative ? (
-                    <div className="w-full rounded-xl overflow-hidden bg-black">
-                      <video src={url} controls className="w-full max-h-[480px]" controlsList="nodownload">
-                        Votre navigateur ne supporte pas la lecture vidéo.
-                      </video>
-                    </div>
+                    <VideoWatermark name={session.participantName} email={session.email}>
+                      <div className="w-full rounded-xl overflow-hidden bg-black">
+                        <video src={url} controls className="w-full max-h-[480px]"
+                          controlsList="nodownload nofullscreen"
+                          onContextMenu={(e) => e.preventDefault()}>
+                          Votre navigateur ne supporte pas la lecture vidéo.
+                        </video>
+                      </div>
+                    </VideoWatermark>
                   ) : (
                     /* Teams / other external link */
                     <div className="text-center py-10 bg-gray-50 rounded-xl">

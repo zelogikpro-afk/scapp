@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { supabaseAdmin } from '../../lib/supabase'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { learnerApiCall } from '../../lib/learnerApi'
 import { setLearnerSession } from '../../lib/learnerSession'
 import { Eye, EyeOff, BookOpen } from 'lucide-react'
 
@@ -11,28 +11,44 @@ export default function EspaceLogin() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError('')
     if (!username.trim() || !password.trim()) { setError('Identifiant et mot de passe requis'); return }
     setLoading(true)
-    const { data, error: err } = await supabaseAdmin
-      .from('learner_accounts')
-      .select('*')
-      .eq('username', username.trim())
-      .eq('password', password.trim())
-      .single()
-    setLoading(false)
-    if (err || !data) { setError('Identifiant ou mot de passe incorrect'); return }
-    if (!data.is_active) { setError('Votre compte est désactivé. Contactez Success Compass.'); return }
-    setLearnerSession({
-      id: data.id, username: data.username,
-      participantName: data.participant_name,
-      formationLevel: data.formation_level,
-      isActive: data.is_active,
-    })
-    navigate('/espace/cours')
+    try {
+      const data = await learnerApiCall<any>({
+        action: 'login',
+        payload: { username: username.trim(), password: password.trim() },
+      })
+      setLearnerSession({
+        id: data.id,
+        username: data.username,
+        participantName: data.participantName,
+        formationLevel: data.formationLevel,
+        isActive: data.isActive,
+        participantId: data.participantId,
+        promotionId: data.promotionId,
+        email: data.email,
+        allPromotionIds: data.allPromotionIds,
+        allLevels: data.allLevels,
+        sessionToken: data.sessionToken,
+      })
+      const redirect = searchParams.get('redirect')
+      if (redirect) {
+        navigate(redirect)
+      } else if (data.formationLevel === 'digital') {
+        navigate('/digital/accueil')
+      } else {
+        navigate('/espace/accueil')
+      }
+    } catch (err: any) {
+      setError(err.message || 'Identifiant ou mot de passe incorrect')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

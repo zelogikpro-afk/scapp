@@ -23,6 +23,7 @@ export default function TestIEPage() {
   const [downloading, setDownloading] = useState(false)
   const [scores, setScores] = useState<Record<IEDimension, number>>({} as any)
   const [fromSession, setFromSession] = useState(false)
+  const [participantId, setParticipantId] = useState<string | null>(null)
   const reportRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export default function TestIEPage() {
       const s = JSON.parse(raw)
       const parts = (s.participantName || '').trim().split(' ')
       setInfo({ firstName: parts[0] || '', lastName: parts.slice(1).join(' ') || '', email: s.email || '', phone: s.phone || '' })
+      setParticipantId(s.participantId || null)
       setFromSession(true)
     } catch { /* ignore */ }
   }, [])
@@ -50,6 +52,7 @@ export default function TestIEPage() {
     const computed = calcScores()
     try {
       await supabase.from('test_results').insert({
+        participant_id: participantId,
         first_name: info.firstName,
         last_name: info.lastName,
         email: info.email,
@@ -251,11 +254,9 @@ export default function TestIEPage() {
           </div>
 
           <div className="mt-8 text-center">
-            {totalAnswered < 20 && (
-              <p className="text-amber-600 text-sm mb-4">
-                {20 - totalAnswered} question{20 - totalAnswered > 1 ? 's' : ''} restante{20 - totalAnswered > 1 ? 's' : ''}
-              </p>
-            )}
+            <p className={`text-sm mb-4 ${totalAnswered < 20 ? 'text-amber-600' : 'invisible'}`}>
+              {20 - totalAnswered} question{20 - totalAnswered > 1 ? 's' : ''} restante{20 - totalAnswered > 1 ? 's' : ''}
+            </p>
             <button onClick={handleSubmit} disabled={totalAnswered < 20 || saving}
               className="px-10 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-semibold rounded-xl transition-all duration-200">
               {saving ? 'Calcul en cours…' : 'Voir mes résultats'}

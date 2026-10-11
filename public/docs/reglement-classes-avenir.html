@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Règlement intérieur — Classes de l'Avenir</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamont:ital,wght@0,400;0,600;0,700;1,400&family=Crimson+Pro:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 15px; }
+  body {
+    background: #edeae4;
+    color: #1c1917;
+    font-family: 'Crimson Pro', Georgia, serif;
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+  }
+
+  .print-bar {
+    max-width: 720px;
+    margin: 0 auto 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .print-bar-label { font-family: 'Cormorant Garamont', serif; font-weight: 600; font-size: 1rem; color: #1e2d5a; letter-spacing: .03em; }
+  .btn-print {
+    background: #1e2d5a;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 20px;
+    font-family: 'Crimson Pro', serif;
+    font-size: .95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .btn-print:hover { background: #14532d; }
+
+  .page {
+    background: #fafaf8;
+    box-shadow: 0 2px 12px rgba(0,0,0,.10), 0 1px 3px rgba(0,0,0,.06);
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 56px 64px;
+  }
+
+  .letterhead { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 20px; border-bottom: 2.5px solid #1e2d5a; margin-bottom: 28px; gap: 16px; }
+  .lh-org { font-family: 'Cormorant Garamont', serif; font-weight: 700; font-size: 1.25rem; color: #1e2d5a; line-height: 1.2; }
+  .lh-prog { font-family: 'Cormorant Garamont', serif; font-style: italic; font-size: 1rem; color: #14532d; margin-top: 3px; }
+  .lh-contact { font-size: .82rem; color: #6b6560; text-align: right; line-height: 1.7; }
+
+  .doc-title { font-family: 'Cormorant Garamont', serif; font-weight: 700; font-size: 1.55rem; color: #1e2d5a; text-align: center; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 6px; }
+  .doc-subtitle { font-family: 'Cormorant Garamont', serif; font-style: italic; font-size: 1rem; color: #14532d; text-align: center; margin-bottom: 28px; }
+
+  hr { border: none; border-top: 1px solid #d4cfc8; margin: 22px 0; }
+
+  .article { margin-bottom: 16px; }
+  .article-title { font-family: 'Cormorant Garamont', serif; font-weight: 600; font-size: 1.05rem; color: #1e2d5a; margin-bottom: 5px; }
+  .article-body { font-size: .93rem; color: #1c1917; line-height: 1.75; }
+
+  .check-item { display: flex; align-items: baseline; gap: 10px; font-size: .93rem; line-height: 1.6; margin-bottom: 10px; }
+  .checkbox { display: inline-block; width: 14px; height: 14px; border: 1.5px solid #999; border-radius: 2px; flex-shrink: 0; margin-top: 3px; }
+
+  .section-label { font-family: 'Cormorant Garamont', serif; font-weight: 600; font-size: 1rem; letter-spacing: .08em; text-transform: uppercase; color: #14532d; margin-bottom: 14px; margin-top: 8px; display: block; }
+
+  .field-grid { display: grid; gap: 14px 24px; margin-bottom: 18px; }
+  .field-grid.two { grid-template-columns: 1fr 1fr; }
+  .field { display: flex; flex-direction: column; gap: 3px; }
+  .field-label { font-size: .8rem; font-weight: 600; color: #6b6560; letter-spacing: .07em; text-transform: uppercase; }
+  .field-line { border-bottom: 1px solid #d4cfc8; height: 26px; }
+
+  .sig-item { display: flex; flex-direction: column; gap: 8px; max-width: 320px; }
+  .sig-label { font-size: .78rem; font-weight: 600; color: #6b6560; letter-spacing: .06em; text-transform: uppercase; }
+  .sig-line { border-bottom: 1px solid #d4cfc8; height: 64px; }
+
+  .sig-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 20px; }
+
+  .intro-text { font-size: .97rem; color: #1c1917; margin-bottom: 14px; line-height: 1.75; }
+
+  .doc-footer { border-top: 1px solid #d4cfc8; margin-top: 36px; padding-top: 12px; display: flex; justify-content: space-between; font-size: .77rem; color: #6b6560; }
+
+  @media print {
+    @page { size: A4; margin: 18mm 16mm; }
+    body { background: white; padding: 0; }
+    .print-bar { display: none; }
+    .page { box-shadow: none; max-width: 100%; padding: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="print-bar">
+  <span class="print-bar-label">Classes de l'Avenir — Règlement intérieur</span>
+  <button class="btn-print" onclick="window.print()">⎙ Imprimer / Enregistrer en PDF</button>
+</div>
+
+<main class="page">
+
+  <header class="letterhead">
+    <div>
+      <div class="lh-org">Success Compass Academy</div>
+      <div class="lh-prog">Les Classes de l'Avenir</div>
+    </div>
+    <div class="lh-contact">contact@scapp.ma<br>06 03 60 97 92</div>
+  </header>
+
+  <h1 class="doc-title">Règlement intérieur</h1>
+  <p class="doc-subtitle">Les Classes de l'Avenir — Success Compass Academy</p>
+
+  <hr>
+
+  <div class="article">
+    <div class="article-title">Article 1 — Objet</div>
+    <p class="article-body">Le présent règlement définit les règles de fonctionnement et de participation aux Classes de l'Avenir, programme de formation et de coaching proposé par Success Compass Academy. Il a pour objectif de garantir un environnement respectueux, bienveillant, sécurisé et favorable à l'apprentissage et à la progression de chaque participant.</p>
+  </div>
+
+  <div class="article">
+    <div class="article-title">Article 2 — Respect</div>
+    <p class="article-body">Chaque participant s'engage à adopter un comportement respectueux envers les autres participants, les coachs, les formateurs et l'équipe de Success Compass Academy. Les insultes, humiliations, intimidations, violences, discriminations et comportements perturbant volontairement les activités ne sont pas autorisés.</p>
+  </div>
+
+  <div class="article">
+    <div class="article-title">Article 3 — Ponctualité et présence</div>
+    <p class="article-body">Les participants sont invités à respecter les horaires des séances et à prévenir l'Academy en cas d'absence ou de retard. La régularité et l'implication sont essentielles à la progression du participant.</p>
+  </div>
+
+  <div class="article">
+    <div class="article-title">Article 4 — Participation</div>
+    <p class="article-body">Les participants sont encouragés à participer activement aux exercices, échanges, mises en situation, ateliers et projets proposés. Chacun est libre de s'exprimer dans le respect des autres.</p>
+  </div>
+
+  <div class="article">
+    <div class="article-title">Article 5 — Téléphones et outils numériques</div>
+    <p class="article-body">L'utilisation des téléphones et outils numériques doit rester compatible avec les objectifs pédagogiques des séances. Certains exercices pourront utiliser le digital, l'intelligence artificielle et les ressources open source dans un objectif d'apprentissage et de développement des compétences.</p>
+  </div>
+
+  <div class="article">
+    <div class="article-title">Article 6 — Confidentialité et respect des échanges</div>
+    <p class="article-body">Les échanges personnels réalisés dans le cadre des activités doivent être respectés. Chaque participant s'engage à ne pas diffuser à l'extérieur les informations personnelles confiées par un autre participant dans le cadre des séances.</p>
+  </div>
+
+  <div class="article">
+    <div class="article-title">Article 7 — Encadrement</div>
+    <p class="article-body">Les Classes de l'Avenir sont un programme de formation et de coaching. Les activités proposées ont pour objectif le développement des compétences personnelles, relationnelles, scolaires et professionnelles. Elles ne constituent pas un acte médical, un diagnostic médical ou une prise en charge thérapeutique. Lorsque la situation d'un participant dépasse le champ de compétence de l'Academy, une orientation vers un professionnel compétent pourra être proposée.</p>
+  </div>
+
+  <div class="article">
+    <div class="article-title">Article 8 — Photos, vidéos et communication</div>
+    <p class="article-body">Dans le cadre des activités de Success Compass Academy, des photos ou vidéos peuvent être réalisées à des fins de communication et de présentation des activités de l'Academy. Pour les participants mineurs, l'autorisation est donnée par le représentant légal.</p>
+  </div>
+
+  <div style="margin: 14px 0 18px;">
+    <div class="check-item"><span class="checkbox"></span> J'autorise Success Compass Academy à utiliser les photos et/ou vidéos sur lesquelles le participant apparaît, dans le cadre de sa communication institutionnelle et promotionnelle.</div>
+    <div class="check-item"><span class="checkbox"></span> Je n'autorise pas l'utilisation des photos et/ou vidéos du participant.</div>
+  </div>
+
+  <div class="field-grid two">
+    <div class="field"><span class="field-label">Nom et prénom du participant</span><div class="field-line"></div></div>
+    <div class="field"><span class="field-label">Pour les mineurs — Représentant légal</span><div class="field-line"></div></div>
+  </div>
+
+  <div class="article" style="margin-top: 20px;">
+    <div class="article-title">Article 9 — Engagement du participant</div>
+    <p class="article-body">En participant aux Classes de l'Avenir, le participant s'engage à respecter le présent règlement et à contribuer à un environnement favorable à l'apprentissage, au développement personnel et à la réussite de chacun.</p>
+  </div>
+
+  <hr>
+
+  <span class="section-label">Acceptation du règlement</span>
+  <p class="intro-text">Je reconnais avoir pris connaissance du présent règlement intérieur et m'engage à le respecter.</p>
+
+  <div class="field-grid two">
+    <div class="field"><span class="field-label">Nom et prénom du participant</span><div class="field-line"></div></div>
+    <div class="field"><span class="field-label">Pour les mineurs — Représentant légal</span><div class="field-line"></div></div>
+  </div>
+
+  <div class="sig-row">
+    <div class="sig-item">
+      <span class="sig-label">Date</span>
+      <div class="sig-line"></div>
+    </div>
+    <div class="sig-item">
+      <span class="sig-label">Signature du participant</span>
+      <div class="sig-line"></div>
+    </div>
+  </div>
+
+  <div style="margin-top: 20px;">
+    <div class="sig-item" style="max-width: 360px;">
+      <span class="sig-label">Signature du représentant légal (pour les mineurs)</span>
+      <div class="sig-line"></div>
+    </div>
+  </div>
+
+  <footer class="doc-footer">
+    <span>Success Compass Academy · contact@scapp.ma</span>
+    <span>Règlement intérieur — Classes de l'Avenir</span>
+  </footer>
+
+</main>
+</body>
+</html>

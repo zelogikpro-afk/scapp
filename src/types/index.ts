@@ -1,5 +1,5 @@
 // ─── User & Auth ───────────────────────────────────────────────────────────────
-export type Role = 'super_admin' | 'admin' | 'sales_agent' | 'coach' | 'crm_manager'
+export type Role = 'super_admin' | 'admin' | 'sales_agent' | 'coach' | 'crm_manager' | 'digital'
 
 export interface User {
   id: string
@@ -58,6 +58,13 @@ export interface Lead {
   dateVersement2?: string
   dateVersement3?: string
   inscriptionId?: string
+  // Programme
+  programTag?: 'coaching_adulte' | 'classes_avenir'
+  // Classes de l'Avenir — infos enfant
+  childName?: string
+  childAge?: string
+  childSchool?: string
+  childLevel?: string
 }
 
 export interface LeadNote {

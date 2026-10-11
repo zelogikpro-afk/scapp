@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'react-hot-toast'
-import { UserCheck, Clock, CheckCircle, XCircle, Eye, UserPlus, Phone, Mail, MapPin, Calendar, Pencil, Trash2, Save, X } from 'lucide-react'
+import { UserCheck, Clock, CheckCircle, XCircle, Eye, UserPlus, Phone, Mail, MapPin, Calendar, Pencil, Trash2, Save, X, Printer } from 'lucide-react'
 import { supabaseAdmin } from '../../lib/supabase'
 import { useAppStore } from '../../store/appStore'
 
@@ -128,6 +128,77 @@ export default function ProspectsList() {
     }
   }
 
+  function printProspect(p: Prospect) {
+    const parts = p.programme.split(' — ')
+    const horaireParts = (p.horaire || '').split(' | ')
+    const attentes = horaireParts.filter(x => !x.startsWith('Autorisation') && !x.startsWith('Photos')).join(', ')
+    const autorisations = horaireParts.filter(x => x.startsWith('Autorisation') || x.startsWith('Photos')).join(' · ')
+    const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+<title>Fiche inscription — ${p.nom} ${p.prenom}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#1a1a1a;padding:32px;line-height:1.6}
+h1{font-size:1.4rem;color:#1e2d5a;margin-bottom:4px}
+.sub{color:#6b7280;font-size:.85rem;margin-bottom:24px}
+.section{margin-bottom:20px}
+.section-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;border-bottom:1px solid #e5e7eb;padding-bottom:4px;margin-bottom:10px}
+.row{display:flex;gap:8px;margin-bottom:6px}
+.label{color:#6b7280;min-width:160px;font-size:.85rem}
+.value{font-weight:600;font-size:.85rem}
+.badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.75rem;font-weight:600;background:#fef3c7;color:#92400e}
+.footer{margin-top:32px;border-top:1px solid #e5e7eb;padding-top:12px;font-size:.75rem;color:#9ca3af;display:flex;justify-content:space-between}
+@media print{body{padding:16px}button{display:none}}
+</style></head><body>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+<div>
+<h1>Fiche d'inscription</h1>
+<div class="sub">Les Classes de l'Avenir · Success Compass Academy</div>
+</div>
+<div>
+<div class="badge">${p.statut === 'en_attente' ? 'En attente' : p.statut === 'valide' ? 'Validé' : 'Refusé'}</div>
+<div style="font-size:.75rem;color:#6b7280;margin-top:4px">Reçue le ${new Date(p.created_at).toLocaleDateString('fr-FR')}</div>
+</div>
+</div>
+
+<div class="section">
+<div class="section-title">Participant / Représentant</div>
+<div class="row"><span class="label">Nom</span><span class="value">${p.nom}</span></div>
+<div class="row"><span class="label">Prénom</span><span class="value">${p.prenom}</span></div>
+<div class="row"><span class="label">Téléphone</span><span class="value">${p.telephone}</span></div>
+${p.email ? `<div class="row"><span class="label">Email</span><span class="value">${p.email}</span></div>` : ''}
+${p.ville ? `<div class="row"><span class="label">Ville</span><span class="value">${p.ville}</span></div>` : ''}
+${p.adresse ? `<div class="row"><span class="label">Adresse</span><span class="value">${p.adresse}</span></div>` : ''}
+${p.date_naissance ? `<div class="row"><span class="label">Date de naissance</span><span class="value">${p.date_naissance}</span></div>` : ''}
+${p.cin ? `<div class="row"><span class="label">CIN</span><span class="value">${p.cin}</span></div>` : ''}
+</div>
+
+<div class="section">
+<div class="section-title">Programme</div>
+${parts.map(pt => `<div class="row"><span class="value">${pt}</span></div>`).join('')}
+${attentes ? `<div class="row"><span class="label">Attentes</span><span class="value">${attentes}</span></div>` : ''}
+${autorisations ? `<div class="row"><span class="label">Autorisations</span><span class="value">${autorisations}</span></div>` : ''}
+</div>
+
+<div class="section">
+<div class="section-title">Paiement</div>
+<div class="row"><span class="label">Modalité</span><span class="value">${p.modalite_paiement === 'complet' ? 'Paiement complet' : p.modalite_paiement === 'acompte' ? 'Acompte + solde' : 'Échelonné (3x)'}</span></div>
+<div class="row"><span class="label">Prix formation</span><span class="value">${p.prix_formation.toLocaleString('fr-MA')} MAD</span></div>
+<div class="row"><span class="label">Montant versé</span><span class="value">${p.montant_paye.toLocaleString('fr-MA')} MAD</span></div>
+${p.prix_formation - p.montant_paye > 0 ? `<div class="row"><span class="label">Reste à payer</span><span class="value">${(p.prix_formation - p.montant_paye).toLocaleString('fr-MA')} MAD</span></div>` : ''}
+${p.date_versement_2 ? `<div class="row"><span class="label">2e versement prévu</span><span class="value">${p.date_versement_2}</span></div>` : ''}
+${p.date_versement_3 ? `<div class="row"><span class="label">3e versement prévu</span><span class="value">${p.date_versement_3}</span></div>` : ''}
+</div>
+
+<div class="footer">
+<span>Success Compass Academy · contact@scapp.ma · 06 03 60 97 92</span>
+<span>ID: ${p.id.slice(0, 8)}</span>
+</div>
+<script>window.onload = () => window.print()</script>
+</body></html>`
+    const w = window.open('', '_blank')
+    if (w) { w.document.write(html); w.document.close() }
+  }
+
   const counts = {
     en_attente: prospects.filter(p => p.statut === 'en_attente').length,
     valide: prospects.filter(p => p.statut === 'valide').length,
@@ -238,6 +309,10 @@ export default function ProspectsList() {
               <div className="flex items-center gap-2">
                 {!editing && (
                   <>
+                    <button onClick={() => printProspect(selected)} title="Imprimer / Télécharger"
+                      className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors">
+                      <Printer className="w-4 h-4" />
+                    </button>
                     <button onClick={() => openEdit(selected)} title="Modifier"
                       className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
                       <Pencil className="w-4 h-4" />
@@ -342,11 +417,33 @@ export default function ProspectsList() {
               </div>
 
               {/* Formation */}
-              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4">
-                <h3 className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-2">Formation</h3>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{selected.programme}</p>
-                <p className="text-xs text-gray-500 mt-1">{selected.modalite === 'presentiel' ? 'Présentiel' : 'En ligne'} · {selected.horaire}</p>
-              </div>
+              {(() => {
+                const horaireParts = (selected.horaire || '').split(' | ')
+                const attentes = horaireParts.filter(x => !x.startsWith('Autorisation') && !x.startsWith('Photos') && x !== '-').join(', ')
+                const autorisations = horaireParts.filter(x => x.startsWith('Autorisation') || x.startsWith('Photos'))
+                const progParts = selected.programme.split(' — ')
+                return (
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 space-y-2">
+                    <h3 className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">Programme</h3>
+                    {progParts.map((pt, i) => (
+                      <p key={i} className={`text-sm ${i === 0 ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'}`}>{pt}</p>
+                    ))}
+                    {attentes && (
+                      <div className="pt-1">
+                        <p className="text-xs text-gray-500 mb-0.5">Attentes</p>
+                        <p className="text-sm text-gray-800 dark:text-gray-200">{attentes}</p>
+                      </div>
+                    )}
+                    {autorisations.length > 0 && (
+                      <div className="pt-1 space-y-0.5">
+                        {autorisations.map((a, i) => (
+                          <p key={i} className="text-xs text-blue-700 dark:text-blue-300 font-medium">{a}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
 
               {/* Paiement */}
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">

@@ -3,7 +3,7 @@ import { cn } from '../../lib/utils'
 import {
   LayoutDashboard, Users, UserCheck, Calendar, CreditCard,
   BarChart3, Settings, BookOpen, ClipboardList, FileText,
-  Award, CheckSquare, Layers, ChevronRight, X, Compass, ShoppingCart, UserPlus, GraduationCap
+  Award, CheckSquare, Layers, ChevronRight, X, Compass, ShoppingCart, UserPlus, GraduationCap, Sparkles
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import type { Role } from '../../types'
@@ -27,6 +27,7 @@ const navItems: NavItem[] = [
   { label: 'CRM',             icon: Users,           path: '/crm',        roles: ['super_admin', 'admin', 'sales_agent', 'crm_manager'] },
   { label: 'Participants',    icon: UserCheck,        path: '/participants',roles: ['super_admin', 'admin', 'coach', 'crm_manager'] },
   { label: 'Inscription',        icon: UserPlus,      path: '/inscription',  roles: ['super_admin', 'admin', 'crm_manager'] },
+  { label: 'Classes de l\'Avenir', icon: GraduationCap, path: '/inscription-classes-avenir', roles: ['super_admin', 'admin', 'crm_manager'] },
   { label: 'Inscriptions reçues', icon: ClipboardList, path: '/inscriptions', roles: ['super_admin', 'admin', 'crm_manager'] },
   {
     label: 'Coaching', icon: BookOpen, path: '/coaching', roles: ['super_admin', 'admin', 'coach', 'crm_manager'],
@@ -37,6 +38,7 @@ const navItems: NavItem[] = [
   },
   { label: 'Formations',  icon: Layers,       path: '/training',      roles: ['super_admin', 'admin', 'coach', 'crm_manager'] },
   { label: 'Paiements',   icon: CreditCard,   path: '/payments',      roles: ['super_admin', 'admin', 'crm_manager'] },
+  { label: 'Reçus',       icon: FileText,     path: '/recu-paiement', roles: ['super_admin', 'admin', 'crm_manager'] },
   { label: 'Calendrier',  icon: Calendar,     path: '/calendar',      roles: ['super_admin', 'admin', 'sales_agent', 'coach', 'crm_manager'] },
   { label: 'Tests',       icon: ClipboardList,path: '/tests',         roles: ['super_admin', 'admin', 'coach', 'crm_manager'] },
   { label: 'Documents',   icon: FileText,     path: '/documents',     roles: ['super_admin', 'admin', 'coach', 'crm_manager'] },
@@ -44,6 +46,8 @@ const navItems: NavItem[] = [
   { label: 'Tâches',      icon: CheckSquare,  path: '/tasks',         roles: ['super_admin', 'admin', 'sales_agent', 'coach', 'crm_manager'] },
   { label: 'Achats',      icon: ShoppingCart, path: '/purchases',     roles: ['super_admin', 'admin', 'crm_manager'] },
   { label: 'E-Learning',   icon: GraduationCap, path: '/elearning',    roles: ['super_admin', 'admin'] },
+  { label: 'Demandes',     icon: ClipboardList, path: '/demandes',     roles: ['super_admin', 'admin', 'coach'] },
+  { label: 'Digital',      icon: Sparkles,      path: '/digital/accueil', roles: ['super_admin', 'admin', 'digital'] },
   { label: 'Rapports',    icon: BarChart3,    path: '/reports',       roles: ['super_admin', 'admin'] },
   { label: 'Paramètres',  icon: Settings,     path: '/settings',      roles: ['super_admin', 'admin'] },
 ]

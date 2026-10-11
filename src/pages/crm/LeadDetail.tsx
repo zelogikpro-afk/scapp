@@ -245,6 +245,26 @@ export default function LeadDetail({ lead, onClose }: { lead: Lead; onClose: () 
               </div>
             </div>
 
+            {/* Classes de l'Avenir — Infos enfant */}
+            {lead.programTag === 'classes_avenir' && (lead.childName || lead.childAge || lead.childSchool || lead.childLevel) && (
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">🏫 Infos enfant / jeune</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: 'Nom de l\'enfant', value: lead.childName },
+                    { label: 'Âge', value: lead.childAge },
+                    { label: 'École actuelle', value: lead.childSchool },
+                    { label: 'Niveau scolaire', value: lead.childLevel },
+                  ].map(({ label, value }) => value ? (
+                    <div key={label}>
+                      <p className="text-xs text-gray-400 mb-0.5">{label}</p>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">{value}</p>
+                    </div>
+                  ) : null)}
+                </div>
+              </div>
+            )}
+
             {/* Paiement */}
             {(lead.prixFormation || lead.montantVerse) ? (
               <div>

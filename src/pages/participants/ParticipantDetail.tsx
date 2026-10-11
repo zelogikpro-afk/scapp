@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Phone, Mail, MapPin, Briefcase, Calendar, CreditCard, BookOpen, ClipboardList, Activity, Edit2, Save, X, Upload, FileText, Trash2, Download, RefreshCw } from 'lucide-react'
+import { Phone, Mail, MapPin, Briefcase, Calendar, CreditCard, BookOpen, ClipboardList, Activity, Edit2, Save, X, Upload, FileText, Trash2, Download, RefreshCw, Award } from 'lucide-react'
 import { Modal } from '../../components/ui/Modal'
 import { Badge } from '../../components/ui/Badge'
 import { Avatar } from '../../components/ui/Avatar'
@@ -63,7 +63,7 @@ const SESSION_STATUS_COLORS: Record<string, string> = {
 interface DocFile { name: string; url: string; size: number; created_at: string }
 
 export default function ParticipantDetail({ participant: p, onClose }: { participant: Participant; onClose: () => void }) {
-  const [tab, setTab] = useState<'profile' | 'edit' | 'coaching' | 'payments' | 'tests' | 'documents' | 'journey'>('profile')
+  const [tab, setTab] = useState<'profile' | 'edit' | 'coaching' | 'payments' | 'tests' | 'documents' | 'journey' | 'certificats'>('profile')
   const { coachingPacks, coachingSessions, payments, tests, updateParticipant, deleteParticipant, updateCoachingPack } = useAppStore()
   const fileRef = useRef<HTMLInputElement>(null)
   const [docs, setDocs] = useState<DocFile[]>([])
@@ -75,6 +75,8 @@ export default function ParticipantDetail({ participant: p, onClose }: { partici
   const [testResults, setTestResults] = useState<TestResult[]>([])
   const [testsLoaded, setTestsLoaded] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null)
+  const [diplomes, setDiplomes] = useState<any[]>([])
+  const [diplomesLoaded, setDiplomesLoaded] = useState(false)
 
   useEffect(() => { loadTestResults() }, [])
 
@@ -102,6 +104,26 @@ export default function ParticipantDetail({ participant: p, onClose }: { partici
     await updateParticipant(p.id, { ...form })
     setSaving(false)
     setTab('profile')
+  }
+
+  async function loadDiplomes() {
+    const fn = p.firstName.trim()
+    const ln = p.lastName.trim()
+    const fullA = `${fn} ${ln}`.toUpperCase()
+    const fullB = `${ln} ${fn}`.toUpperCase()
+    const { data } = await supabase.from('diplomes')
+      .select('*')
+      .or(`participant_name.ilike.%${fn}%,participant_id.eq.${p.id}`)
+      .order('session_date', { ascending: false })
+    // Filter to keep only records that match this participant
+    const filtered = (data || []).filter((d: any) => {
+      const name = (d.participant_name || '').toUpperCase().replace(/\s+/g,' ').trim()
+      return name === fullA || name === fullB ||
+        (name.includes(fn.toUpperCase()) && name.includes(ln.toUpperCase())) ||
+        d.participant_id === p.id
+    })
+    setDiplomes(filtered)
+    setDiplomesLoaded(true)
   }
 
   async function loadTestResults() {
@@ -191,6 +213,7 @@ export default function ParticipantDetail({ participant: p, onClose }: { partici
     { id: 'coaching', label: `Coaching (${pPacks.length})` },
     { id: 'payments', label: `Paiements (${pPayments.length})` },
     { id: 'tests', label: `Tests (${testResults.length})` },
+    { id: 'certificats', label: `Certificats${diplomes.length ? ` (${diplomes.length})` : ''}` },
     { id: 'documents', label: 'Documents' },
     { id: 'journey', label: 'Parcours' },
   ] as const
@@ -247,7 +270,7 @@ export default function ParticipantDetail({ participant: p, onClose }: { partici
         <div className="border-b border-gray-100 dark:border-gray-800">
           <div className="flex gap-0.5 overflow-x-auto scrollbar-hide">
             {tabs.map(t => (
-              <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'documents' && !docsLoaded) loadDocs(); if (t.id === 'tests' && !testsLoaded) loadTestResults() }}
+              <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'documents' && !docsLoaded) loadDocs(); if (t.id === 'tests' && !testsLoaded) loadTestResults(); if (t.id === 'certificats' && !diplomesLoaded) loadDiplomes() }}
                 className={`px-3 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors -mb-px ${tab === t.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
               >
                 {t.label}
@@ -597,6 +620,46 @@ export default function ParticipantDetail({ participant: p, onClose }: { partici
                     </div>
                   )}
                 </Card>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Certificats Tab */}
+        {tab === 'certificats' && (
+          <div className="space-y-3">
+            {!diplomesLoaded && <p className="text-sm text-gray-400 text-center py-8">Chargement…</p>}
+            {diplomesLoaded && diplomes.length === 0 && (
+              <div className="text-center py-12">
+                <Award className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-sm text-gray-400">Aucun certificat délivré</p>
+              </div>
+            )}
+            {diplomes.map((d: any) => {
+              const levelColor =
+                d.level.includes('Master Coach') ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300' :
+                d.level.includes('Parental') ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300' :
+                d.level.includes('Formateurs') ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300' :
+                d.level.includes('Commerciale') ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300' :
+                'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+              return (
+                <div key={d.id} className={`flex items-center gap-4 p-4 rounded-xl border ${levelColor}`}>
+                  <div className="w-10 h-10 rounded-full bg-white dark:bg-gray-900 border-2 border-current flex items-center justify-center flex-shrink-0">
+                    <Award className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold">{d.level}</p>
+                    <p className="text-xs opacity-75 mt-0.5">
+                      {d.session_label ? `Session de ${d.session_label}` : ''}
+                      {d.session_date ? ` · ${new Date(d.session_date).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}` : ''}
+                    </p>
+                  </div>
+                  {d.cert_number && (
+                    <span className="text-xs font-mono bg-white dark:bg-gray-900 border border-current px-2 py-1 rounded-lg opacity-80 flex-shrink-0">
+                      N°{d.cert_number}
+                    </span>
+                  )}
+                </div>
               )
             })}
           </div>

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { QUESTIONS, PROFILE_NAMES, PROFILE_DESCRIPTIONS, PROFILE_PDF, type ProfileKey } from '../../data/testMappingQuestions'
 import { supabase } from '../../lib/supabase'
 
@@ -23,7 +23,21 @@ export default function TestMappingPage() {
   const [result, setResult] = useState<ProfileKey | null>(null)
   const [downloading, setDownloading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [fromSession, setFromSession] = useState(false)
+  const [participantId, setParticipantId] = useState<string | null>(null)
   const topRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('sc_learner_session')
+      if (!raw) return
+      const s = JSON.parse(raw)
+      const parts = (s.participantName || '').trim().split(' ')
+      setInfo({ firstName: parts[0] || '', lastName: parts.slice(1).join(' ') || '', email: s.email || '', phone: s.phone || '' })
+      setParticipantId(s.participantId || null)
+      setFromSession(true)
+    } catch { /* ignore */ }
+  }, [])
 
   const sectionQuestions = QUESTIONS.filter(q => q.section === SECTIONS[currentSection])
   const totalAnswered = QUESTIONS.filter(q => answers[q.id] != null).length
@@ -70,6 +84,7 @@ export default function TestMappingPage() {
     setResult(dominant)
 
     const { error } = await supabase.from('test_results').insert({
+      participant_id: participantId,
       first_name: info.firstName,
       last_name: info.lastName,
       email: info.email,
@@ -159,7 +174,7 @@ export default function TestMappingPage() {
               </div>
 
               <button
-                onClick={() => setStep('info')}
+                onClick={() => setStep(fromSession ? 'questions' : 'info')}
                 className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold text-lg hover:opacity-90 transition-opacity shadow-md"
               >
                 Commencer le test →
@@ -320,11 +335,9 @@ export default function TestMappingPage() {
               </button>
             </div>
 
-            {!sectionAnswered && (
-              <p className="text-center text-xs text-gray-400 mt-3">
-                Répondez à toutes les questions de cette section pour continuer
-              </p>
-            )}
+            <p className={`text-center text-xs text-gray-400 mt-3 ${sectionAnswered ? 'invisible' : ''}`}>
+              Répondez à toutes les questions de cette section pour continuer
+            </p>
           </div>
         )}
 

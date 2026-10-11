@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, ShoppingCart, CheckCircle, Clock, Package, FileText, XCircle, Trash2, Edit2, Save } from 'lucide-react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { Plus, Search, ShoppingCart, CheckCircle, Package, FileText, XCircle, Trash2, Edit2, Save, Upload, ExternalLink } from 'lucide-react'
 import DateRangeFilter, { type Preset, type DateRange, getRange, inRange } from '../../components/ui/DateRangeFilter'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
@@ -8,7 +8,7 @@ import { Input } from '../../components/ui/Input'
 import { Table, Thead, Th, Tbody, Tr, Td } from '../../components/ui/Table'
 import { Modal } from '../../components/ui/Modal'
 import { supabase } from '../../lib/supabase'
-import { useAuthStore } from '../../store/authStore'
+import { supabaseAdmin } from '../../lib/supabase'
 import toast from 'react-hot-toast'
 
 export type Purchase = {
@@ -21,7 +21,7 @@ export type Purchase = {
   activity: string
   quantity: number
   urgency: 'low' | 'normal' | 'urgent'
-  status: 'requested' | 'approved' | 'in_progress' | 'purchased' | 'invoiced' | 'refused'
+  status: 'in_progress' | 'purchased' | 'invoiced' | 'refused'
   approved_by: string
   validation_comment: string
   handled_by: string
@@ -38,18 +38,10 @@ export type Purchase = {
 }
 
 const STATUS_CONFIG = {
-  requested:   { label: 'Demandé',       color: 'default' as const, icon: Clock },
-  approved:    { label: 'Validé',         color: 'success' as const, icon: CheckCircle },
   in_progress: { label: "En cours d'achat", color: 'info' as const, icon: ShoppingCart },
-  purchased:   { label: 'Acheté',         color: 'purple' as const, icon: Package },
-  invoiced:    { label: 'Facturé',        color: 'warning' as const, icon: FileText },
-  refused:     { label: 'Refusé',         color: 'danger' as const, icon: XCircle },
-}
-
-const URGENCY_CONFIG = {
-  low:    { label: 'Faible',   dot: 'bg-emerald-400' },
-  normal: { label: 'Normale',  dot: 'bg-amber-400' },
-  urgent: { label: 'Urgente',  dot: 'bg-red-500' },
+  purchased:   { label: 'Acheté',            color: 'purple' as const, icon: Package },
+  invoiced:    { label: 'Facturé',           color: 'warning' as const, icon: FileText },
+  refused:     { label: 'Refusé',            color: 'danger' as const, icon: XCircle },
 }
 
 const CATEGORIES = ['Matériel', 'Formation', 'Logiciels', 'Consommables', 'Marketing', 'Loyer', 'Salaires', 'Prestataires', 'Transport', 'Restauration', 'Autre']
@@ -63,12 +55,12 @@ const EMPTY: Omit<Purchase, 'id' | 'created_at' | 'reference'> = {
   activity: '',
   quantity: 1,
   urgency: 'normal',
-  status: 'requested',
+  status: 'purchased',
   approved_by: '',
   validation_comment: '',
   handled_by: '',
   supplier: '',
-  purchase_date: null,
+  purchase_date: new Date().toISOString().split('T')[0],
   unit_price: 0,
   total_price: 0,
   payment_method: '',
@@ -82,11 +74,6 @@ function formatMAD(n: number) {
   return n.toLocaleString('fr-MA', { style: 'currency', currency: 'MAD', maximumFractionDigits: 0 })
 }
 
-function formatDate(d: string | null) {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
 function PurchaseForm({ initial, onSave, onClose }: {
   initial: Partial<Purchase>
   onSave: (data: any) => Promise<void>
@@ -98,7 +85,7 @@ function PurchaseForm({ initial, onSave, onClose }: {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.description || !form.requester) { toast.error('Description et demandeur requis'); return }
+    if (!form.description) { toast.error('Description requise'); return }
     setSaving(true)
     await onSave(form)
     setSaving(false)
@@ -108,63 +95,28 @@ function PurchaseForm({ initial, onSave, onClose }: {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Demandeur *</label>
-          <select value={form.requester} onChange={e => set('requester', e.target.value)} className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-            <option value="">— Choisir —</option>
-            {TEAM.map(t => <option key={t}>{t}</option>)}
-          </select>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description *</label>
+          <input type="text" value={form.description} onChange={e => set('description', e.target.value)} placeholder="Ex: Imprimante laser couleur A4" className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
         </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Date demande</label>
-          <input type="date" value={form.request_date || ''} onChange={e => set('request_date', e.target.value)} className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description du besoin *</label>
-        <input type="text" value={form.description} onChange={e => set('description', e.target.value)} placeholder="Ex: Imprimante laser couleur A4" className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
-      </div>
-
-      <div className="grid grid-cols-3 gap-3">
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Catégorie</label>
           <select value={form.category} onChange={e => set('category', e.target.value)} className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
             {CATEGORIES.map(c => <option key={c}>{c}</option>)}
           </select>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Activité</label>
           <input type="text" value={form.activity} onChange={e => set('activity', e.target.value)} placeholder="Ex: Administratif" className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
         </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Urgence</label>
-          <select value={form.urgency} onChange={e => set('urgency', e.target.value as any)} className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-            <option value="low">🟢 Faible</option>
-            <option value="normal">🟡 Normale</option>
-            <option value="urgent">🔴 Urgente</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Statut</label>
           <select value={form.status} onChange={e => set('status', e.target.value as any)} className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
             {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Validé / Refusé par</label>
-          <select value={form.approved_by} onChange={e => set('approved_by', e.target.value)} className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-            <option value="">—</option>
-            {TEAM.map(t => <option key={t}>{t}</option>)}
-          </select>
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Commentaire validation</label>
-        <input type="text" value={form.validation_comment} onChange={e => set('validation_comment', e.target.value)} className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
       </div>
 
       <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
@@ -232,71 +184,96 @@ function PurchaseForm({ initial, onSave, onClose }: {
 }
 
 export default function Purchases() {
-  const { user } = useAuthStore()
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
-  const [requesterFilter, setRequesterFilter] = useState<string>('all')
-  const [urgencyFilter, setUrgencyFilter] = useState<string>('all')
   const [invoiceFilter, setInvoiceFilter] = useState<string>('all')
   const [preset, setPreset] = useState<Preset>('all')
   const [range, setRange] = useState<DateRange>(getRange('all'))
   const [showAdd, setShowAdd] = useState(false)
-
-  const handleDateChange = (p: Preset, r: DateRange) => { setPreset(p); setRange(r) }
   const [editing, setEditing] = useState<Purchase | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [receipts, setReceipts] = useState<Record<string, string>>({}) // purchaseId -> publicUrl
+  const [uploading, setUploading] = useState<string | null>(null)
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  const handleDateChange = (p: Preset, r: DateRange) => { setPreset(p); setRange(r) }
 
   const fetchPurchases = async () => {
     setLoading(true)
-    const { data, error } = await supabase.from('purchases').select('*').order('request_date', { ascending: false })
+    const { data, error } = await supabase.from('purchases').select('*').order('purchase_date', { ascending: false })
     if (!error && data) setPurchases(data as Purchase[])
     setLoading(false)
   }
 
-  useEffect(() => { fetchPurchases() }, [])
+  const fetchReceipts = async () => {
+    const { data: files } = await supabaseAdmin.storage.from('payment-receipts').list('purchases')
+    if (files) {
+      const map: Record<string, string> = {}
+      for (const f of files) {
+        const purchaseId = f.name.split('.')[0]
+        const { data: urlData } = supabaseAdmin.storage.from('payment-receipts').getPublicUrl(`purchases/${f.name}`)
+        map[purchaseId] = urlData.publicUrl
+      }
+      setReceipts(map)
+    }
+  }
+
+  useEffect(() => { fetchPurchases(); fetchReceipts() }, [])
+
+  const uploadReceipt = async (purchaseId: string, file: File) => {
+    setUploading(purchaseId)
+    const ext = file.name.split('.').pop()
+    const path = `purchases/${purchaseId}.${ext}`
+    // Remove existing file if any (ignore error)
+    await supabaseAdmin.storage.from('payment-receipts').remove([path])
+    const { error } = await supabaseAdmin.storage.from('payment-receipts').upload(path, file)
+    if (error) {
+      toast.error('Erreur upload : ' + error.message)
+      setUploading(null)
+      return
+    }
+    const { data: urlData } = supabaseAdmin.storage.from('payment-receipts').getPublicUrl(path)
+    setReceipts(prev => ({ ...prev, [purchaseId]: urlData.publicUrl }))
+    toast.success('Reçu / facture joint ✅')
+    setUploading(null)
+  }
 
   const filtered = useMemo(() => purchases.filter(p => {
-    const matchSearch    = !search || `${p.description} ${p.requester} ${p.supplier} ${p.category} ${p.reference}`.toLowerCase().includes(search.toLowerCase())
-    const matchStatus    = statusFilter === 'all' || p.status === statusFilter
-    const matchCat       = categoryFilter === 'all' || p.category === categoryFilter
-    const matchRequester = requesterFilter === 'all' || p.requester === requesterFilter
-    const matchUrgency   = urgencyFilter === 'all' || p.urgency === urgencyFilter
-    const matchInvoice   = invoiceFilter === 'all'
+    const matchSearch  = !search || `${p.description} ${p.supplier} ${p.category} ${p.reference}`.toLowerCase().includes(search.toLowerCase())
+    const matchStatus  = statusFilter === 'all' || p.status === statusFilter
+    const matchCat     = categoryFilter === 'all' || p.category === categoryFilter
+    const matchInvoice = invoiceFilter === 'all'
       || (invoiceFilter === 'received' && p.invoice_received)
       || (invoiceFilter === 'pending' && p.invoice_possible && !p.invoice_received)
       || (invoiceFilter === 'na' && !p.invoice_possible)
-    const matchDate      = inRange(p.request_date, range)
-    return matchSearch && matchStatus && matchCat && matchRequester && matchUrgency && matchInvoice && matchDate
-  }), [purchases, search, statusFilter, categoryFilter, requesterFilter, urgencyFilter, invoiceFilter, range])
+    const matchDate    = inRange(p.purchase_date, range)
+    return matchSearch && matchStatus && matchCat && matchInvoice && matchDate
+  }), [purchases, search, statusFilter, categoryFilter, invoiceFilter, range])
 
   const stats = useMemo(() => {
-    const demanded = purchases.filter(p => p.status === 'requested').length
     const inProgress = purchases.filter(p => p.status === 'in_progress').length
     const thisMonth = purchases.filter(p => {
       if (!p.purchase_date) return false
       const d = new Date(p.purchase_date)
       const now = new Date()
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
-    })
+    }).length
     const spent = purchases.filter(p => ['purchased','invoiced'].includes(p.status)).reduce((s, p) => s + (p.total_price || 0), 0)
-    const missingInvoices = purchases.filter(p => p.status === 'invoiced' && !p.invoice_received).length
-    return { demanded, inProgress, thisMonth: thisMonth.length, spent, missingInvoices }
-  }, [purchases])
+    const missingInvoices = purchases.filter(p => p.invoice_possible && !p.invoice_received).length
+    const withReceipt = Object.keys(receipts).length
+    return { inProgress, thisMonth, spent, missingInvoices, withReceipt }
+  }, [purchases, receipts])
 
   const handleSave = async (data: any) => {
     const payload = {
-      requester: data.requester,
       description: data.description,
       category: data.category,
       activity: data.activity,
       quantity: data.quantity,
-      urgency: data.urgency,
       status: data.status,
-      approved_by: data.approved_by,
-      validation_comment: data.validation_comment,
       handled_by: data.handled_by,
       supplier: data.supplier,
       purchase_date: data.purchase_date || null,
@@ -345,18 +322,18 @@ export default function Purchases() {
           <p className="text-sm text-gray-500 mt-0.5">{purchases.length} achat{purchases.length > 1 ? 's' : ''} au total</p>
         </div>
         <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setShowAdd(true)}>
-          Nouvelle demande
+          Nouvel achat
         </Button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
-          { label: 'En attente', value: stats.demanded, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
-          { label: "En cours d'achat", value: stats.inProgress, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-          { label: 'Achats ce mois', value: stats.thisMonth, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
-          { label: 'Total dépensé', value: formatMAD(stats.spent), color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
-          { label: 'Factures manquantes', value: stats.missingInvoices, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20' },
+          { label: "En cours d'achat",  value: stats.inProgress,     color: 'text-blue-600',    bg: 'bg-blue-50 dark:bg-blue-900/20' },
+          { label: 'Achats ce mois',    value: stats.thisMonth,      color: 'text-purple-600',  bg: 'bg-purple-50 dark:bg-purple-900/20' },
+          { label: 'Total dépensé',     value: formatMAD(stats.spent), color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
+          { label: 'Factures manquantes', value: stats.missingInvoices, color: 'text-red-600',  bg: 'bg-red-50 dark:bg-red-900/20' },
+          { label: 'Reçus joints',      value: stats.withReceipt,    color: 'text-teal-600',    bg: 'bg-teal-50 dark:bg-teal-900/20' },
         ].map(s => (
           <div key={s.label} className={`rounded-xl p-4 ${s.bg}`}>
             <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
@@ -379,14 +356,6 @@ export default function Purchases() {
           <option value="all">Toutes catégories</option>
           {categories.map(c => <option key={c}>{c}</option>)}
         </select>
-        <select value={requesterFilter} onChange={e => setRequesterFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300">
-          <option value="all">Tous les demandeurs</option>
-          {TEAM.map(t => <option key={t}>{t}</option>)}
-        </select>
-        <select value={urgencyFilter} onChange={e => setUrgencyFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300">
-          <option value="all">Toutes urgences</option>
-          {Object.entries(URGENCY_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-        </select>
         <select value={invoiceFilter} onChange={e => setInvoiceFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300">
           <option value="all">Toutes factures</option>
           <option value="received">Facture reçue</option>
@@ -402,25 +371,24 @@ export default function Purchases() {
             <tr>
               <Th>Réf.</Th>
               <Th>Description</Th>
-              <Th>Demandeur</Th>
               <Th>Catégorie</Th>
-              <Th>Urgence</Th>
               <Th>Statut</Th>
               <Th>Fournisseur</Th>
               <Th>Montant</Th>
               <Th>Facture</Th>
+              <Th>Reçu / Photo</Th>
               <Th><span /></Th>
             </tr>
           </Thead>
           <Tbody>
             {loading ? (
-              <Tr><Td className="text-center text-gray-400 py-12" colSpan={10 as any}><span>Chargement…</span></Td></Tr>
+              <Tr><Td className="text-center text-gray-400 py-12" colSpan={9 as any}><span>Chargement…</span></Td></Tr>
             ) : filtered.length === 0 ? (
-              <Tr><Td className="text-center text-gray-400 py-12" colSpan={10 as any}><span>Aucun achat trouvé</span></Td></Tr>
+              <Tr><Td className="text-center text-gray-400 py-12" colSpan={9 as any}><span>Aucun achat trouvé</span></Td></Tr>
             ) : filtered.map(p => {
-              const sc = STATUS_CONFIG[p.status]
-              const uc = URGENCY_CONFIG[p.urgency]
+              const sc = STATUS_CONFIG[p.status] ?? STATUS_CONFIG['purchased']
               const Icon = sc.icon
+              const receiptUrl = receipts[p.id]
               return (
                 <Tr key={p.id}>
                   <Td><span className="font-mono text-xs text-gray-500">{p.reference || '—'}</span></Td>
@@ -430,14 +398,7 @@ export default function Purchases() {
                       {p.notes && <p className="text-xs text-gray-400 max-w-48 truncate">{p.notes}</p>}
                     </div>
                   </Td>
-                  <Td><span className="text-sm">{p.requester}</span></Td>
                   <Td><span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">{p.category}</span></Td>
-                  <Td>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`w-2 h-2 rounded-full ${uc.dot}`} />
-                      <span className="text-xs text-gray-600 dark:text-gray-400">{uc.label}</span>
-                    </div>
-                  </Td>
                   <Td>
                     <div className="flex items-center gap-1.5">
                       <Icon className="w-3.5 h-3.5 flex-shrink-0" />
@@ -451,7 +412,7 @@ export default function Purchases() {
                     </span>
                   </Td>
                   <Td>
-                    <div className="text-xs space-y-0.5">
+                    <div className="text-xs">
                       {p.invoice_possible ? (
                         p.invoice_received
                           ? <span className="text-emerald-600 font-medium">Reçue ✓</span>
@@ -460,6 +421,32 @@ export default function Purchases() {
                         <span className="text-gray-400">N/A</span>
                       )}
                     </div>
+                  </Td>
+                  <Td>
+                    {receiptUrl ? (
+                      <div className="flex items-center gap-2">
+                        <a href={receiptUrl} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                          <ExternalLink className="w-3 h-3" />Voir
+                        </a>
+                        <label className="text-xs text-gray-400 cursor-pointer hover:text-gray-600 underline">
+                          Remplacer
+                          <input type="file" accept="image/*,application/pdf" className="hidden"
+                            ref={el => { fileInputRefs.current[p.id] = el }}
+                            onChange={e => { const f = e.target.files?.[0]; if (f) uploadReceipt(p.id, f) }} />
+                        </label>
+                      </div>
+                    ) : (
+                      <label className={`flex items-center gap-1 text-xs cursor-pointer px-2 py-1 rounded-lg border border-dashed transition-colors
+                        ${uploading === p.id ? 'border-blue-300 text-blue-400 bg-blue-50' : 'border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50'}`}>
+                        <Upload className="w-3 h-3" />
+                        {uploading === p.id ? 'Upload…' : 'Joindre'}
+                        <input type="file" accept="image/*,application/pdf" className="hidden"
+                          disabled={uploading === p.id}
+                          ref={el => { fileInputRefs.current[p.id] = el }}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) uploadReceipt(p.id, f) }} />
+                      </label>
+                    )}
                   </Td>
                   <Td>
                     <div className="flex items-center gap-1">
@@ -478,9 +465,8 @@ export default function Purchases() {
         </Table>
       </Card>
 
-      {/* Add Modal */}
       {showAdd && (
-        <Modal open={showAdd} title="Nouvelle demande d'achat" onClose={() => setShowAdd(false)} size="lg">
+        <Modal open={showAdd} title="Nouvel achat" onClose={() => setShowAdd(false)} size="lg">
           <PurchaseForm initial={{}} onSave={handleSave} onClose={() => setShowAdd(false)} />
         </Modal>
       )}
