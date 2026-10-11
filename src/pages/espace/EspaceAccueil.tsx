@@ -50,6 +50,19 @@ const TIPS = [
   { title: "L'auto-sabotage", body: "Repérez les comportements répétitifs qui empêchent le client d'avancer — souvent liés à une croyance profonde." },
 ]
 
+function RingProgress({ pct, color, size = 64, stroke = 6 }: { pct: number; color: string; size?: number; stroke?: number }) {
+  const r = (size - stroke * 2) / 2
+  const circ = 2 * Math.PI * r
+  const dash = (pct / 100) * circ
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth={stroke} className="text-gray-100" />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+        strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" style={{ transition: 'stroke-dasharray 0.6s ease' }} />
+    </svg>
+  )
+}
+
 export default function EspaceAccueil() {
   const session = useOutletContext<LearnerSession>()
   const navigate = useNavigate()
@@ -67,7 +80,6 @@ export default function EspaceAccueil() {
     setLoading(true)
     const ids = session.allPromotionIds?.length ? session.allPromotionIds : []
     const currentId = ids[ids.length - 1]
-
     const data = await learnerApi.getAccueil({
       promotionId: currentId || null,
       allPromotionIds: ids,
@@ -75,7 +87,6 @@ export default function EspaceAccueil() {
       participantId: session.participantId || null,
       participantName: session.participantName,
     }) as any
-
     setAnnouncements(data.announcements || [])
     setNextSessions(data.upcomingSessions || [])
     setRecentDocs(data.recentDocs || [])
@@ -95,17 +106,9 @@ export default function EspaceAccueil() {
     const parts = session.participantName.trim().split(' ')
     const firstName = parts[0] || ''
     const lastName = parts.slice(1).join(' ') || ''
-
-    const { data: unlocks } = await supabase
-      .from('test_unlocks')
-      .select('id')
-      .eq('learner_id', learnerId)
-      .eq('test_type', 'quiz_coach')
-      .limit(1)
-
+    const { data: unlocks } = await supabase.from('test_unlocks').select('id').eq('learner_id', learnerId).eq('test_type', 'quiz_coach').limit(1)
     if (!unlocks?.length) return
     setQuizUnlocked(true)
-
     let done = false
     if (pid) {
       const { data } = await supabase.from('test_results').select('id').eq('test_type', 'quiz_coach').eq('participant_id', pid).limit(1)
@@ -118,10 +121,16 @@ export default function EspaceAccueil() {
     setQuizDone(done)
   }
 
-  if (loading) return <div className="text-center py-20 text-gray-400">Chargement…</div>
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-24 gap-3">
+      <div className="w-10 h-10 rounded-full border-4 border-[#1D3462]/20 border-t-[#1D3462] animate-spin" />
+      <p className="text-sm text-gray-400">Chargement…</p>
+    </div>
+  )
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir'
+  const greetingEmoji = hour < 12 ? '🌤️' : hour < 18 ? '☀️' : '🌙'
 
   const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000)
   const quote = QUOTES[dayOfYear % QUOTES.length]
@@ -134,189 +143,253 @@ export default function EspaceAccueil() {
   const totalTests = stats.testUnlocks || 1
   const testPct = Math.min(100, Math.round((stats.testsDone / totalTests) * 100))
   const recPct = stats.recordings > 0 ? 100 : 0
+  const docPct = stats.docs > 0 ? 100 : 0
+
+  const initials = session.participantName.trim().split(' ').slice(0, 2).map((w: string) => w[0]).join('').toUpperCase()
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 pb-4">
 
-      {/* Hero */}
-      <div className="bg-gradient-to-br from-[#1D3462] to-[#2B4A8C] rounded-2xl p-6 text-white">
-        <p className="text-blue-200 text-sm font-medium mb-1">{greeting} 👋</p>
-        <h1 className="text-2xl font-bold">{session.participantName}</h1>
-        <p className="text-blue-200 text-sm mt-0.5">{levelLabel}</p>
-        <div className="mt-4 pt-4 border-t border-white/10">
-          <p className="text-white/50 text-xs mb-1 italic">Citation du jour</p>
-          <p className="text-white/85 text-sm leading-relaxed italic">"{quote.text}"</p>
-          <p className="text-white/45 text-xs mt-1.5">— {quote.author}</p>
+      {/* ── Hero ── */}
+      <div className="relative rounded-3xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #0f2347 0%, #1D3462 50%, #2a4a8a 100%)' }}>
+        {/* Cercles décoratifs */}
+        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #7eb0ff, transparent)' }} />
+        <div className="absolute -bottom-8 -left-8 w-32 h-32 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #a78bfa, transparent)' }} />
+        <div className="absolute top-1/2 right-4 w-20 h-20 rounded-full opacity-5" style={{ background: 'radial-gradient(circle, #fff, transparent)' }} />
+
+        <div className="relative px-5 pt-5 pb-4">
+          {/* Top row */}
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <p className="text-blue-300 text-xs font-medium flex items-center gap-1.5 mb-1">
+                <span>{greetingEmoji}</span> {greeting}
+              </p>
+              <h1 className="text-xl font-bold text-white leading-tight">{session.participantName}</h1>
+              <span className="inline-block mt-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.12)', color: '#93c5fd' }}>
+                {levelLabel}
+              </span>
+            </div>
+            {/* Avatar */}
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-sm flex-shrink-0 ml-3"
+              style={{ background: 'linear-gradient(135deg, #60a5fa, #a78bfa)', color: '#fff' }}>
+              {initials}
+            </div>
+          </div>
+
+          {/* Citation */}
+          <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.07)' }}>
+            <div className="text-3xl leading-none text-blue-300/40 font-serif mb-1">"</div>
+            <p className="text-white/80 text-xs leading-relaxed italic -mt-2">{quote.text}</p>
+            <p className="text-blue-300/60 text-xs mt-1.5">— {quote.author}</p>
+          </div>
         </div>
       </div>
 
-      {/* Bandeau Quiz Final N1 */}
+      {/* ── Quiz Final N1 ── */}
       {quizUnlocked && !quizDone && (
-        <button
-          onClick={() => navigate('/test/quiz-coach')}
-          className="w-full text-left rounded-2xl overflow-hidden border-2 border-amber-300 shadow-sm hover:shadow-md transition-shadow"
-          style={{ background: 'linear-gradient(135deg, #1D3462 0%, #2a4a8a 100%)' }}
-        >
-          <div className="px-5 py-4 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-400/20 flex items-center justify-center flex-shrink-0 text-2xl">
-              📝
-            </div>
+        <button onClick={() => navigate('/test/quiz-coach')}
+          className="w-full text-left rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all active:scale-[0.98]"
+          style={{ background: 'linear-gradient(135deg, #d97706, #f59e0b)' }}>
+          <div className="px-4 py-4 flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center text-xl flex-shrink-0">📝</div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-amber-300 uppercase tracking-wide mb-0.5">À compléter</p>
-              <p className="text-base font-bold text-white">Quiz Final — Niveau 1</p>
-              <p className="text-xs text-blue-200 mt-0.5">40 questions · Dév. Personnel & Coaching de Vie</p>
+              <p className="text-amber-100 text-xs font-semibold uppercase tracking-wide">À compléter</p>
+              <p className="text-white font-bold text-sm mt-0.5">Quiz Final — Niveau 1</p>
+              <p className="text-amber-100/70 text-xs">40 questions · Coaching de Vie</p>
             </div>
-            <div className="flex items-center gap-1.5 bg-amber-400 text-amber-900 font-bold text-sm px-4 py-2 rounded-xl flex-shrink-0">
-              Commencer <ChevronRight className="w-4 h-4" />
+            <div className="bg-white/20 rounded-xl p-2 flex-shrink-0">
+              <ChevronRight className="w-5 h-5 text-white" />
             </div>
           </div>
         </button>
       )}
 
       {quizUnlocked && quizDone && (
-        <button
-          onClick={() => navigate('/espace/tests')}
-          className="w-full text-left rounded-2xl overflow-hidden border border-green-200 bg-green-50 hover:bg-green-100 transition-colors"
-        >
-          <div className="px-5 py-3.5 flex items-center gap-3">
-            <span className="text-xl">✅</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-green-800">Quiz Final N1 — Complété</p>
-              <p className="text-xs text-green-600 mt-0.5">Voir votre résultat et la correction →</p>
-            </div>
+        <button onClick={() => navigate('/espace/tests')}
+          className="w-full text-left rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-50 hover:from-emerald-100 px-4 py-3.5 flex items-center gap-3 transition-colors">
+          <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center text-lg">✅</div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-emerald-800">Quiz Final N1 — Complété</p>
+            <p className="text-xs text-emerald-600 mt-0.5">Voir votre résultat →</p>
           </div>
         </button>
       )}
 
-      {/* Progression */}
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-gray-50">
-          <h2 className="font-semibold text-gray-900 text-sm">Ma progression</h2>
-        </div>
-        <div className="px-5 py-4 space-y-3">
+      {/* ── Progression en anneaux ── */}
+      <div className="bg-white rounded-3xl border border-gray-100 px-5 py-4 shadow-sm">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Ma progression</p>
+        <div className="grid grid-cols-3 gap-2">
           {[
-            { label: 'Tests passés', done: stats.testsDone, total: totalTests, pct: testPct, color: 'bg-purple-500' },
-            { label: 'Enregistrements', done: stats.recordings, total: stats.recordings, pct: recPct, color: 'bg-blue-500' },
-            { label: 'Documents', done: stats.docs, total: stats.docs, pct: stats.docs > 0 ? 100 : 0, color: 'bg-green-500' },
+            { label: 'Tests', done: stats.testsDone, total: totalTests, pct: testPct, color: '#8b5cf6' },
+            { label: 'Vidéos', done: stats.recordings, total: stats.recordings || 1, pct: recPct, color: '#3b82f6' },
+            { label: 'Documents', done: stats.docs, total: stats.docs || 1, pct: docPct, color: '#10b981' },
           ].map(({ label, done, total, pct, color }) => (
-            <div key={label} className="flex items-center gap-3">
-              <span className="text-xs text-gray-500 w-32 flex-shrink-0">{label}</span>
-              <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} />
+            <div key={label} className="flex flex-col items-center gap-1.5">
+              <div className="relative">
+                <RingProgress pct={pct} color={color} size={60} stroke={5} />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-xs font-bold text-gray-700">{done}<span className="text-gray-400 font-normal">/{total}</span></span>
+                </div>
               </div>
-              <span className="text-xs text-gray-400 w-10 text-right flex-shrink-0">{done}/{total}</span>
+              <span className="text-xs text-gray-500 font-medium">{label}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Accès rapide */}
+      {/* ── Accès rapide ── */}
       <div className="grid grid-cols-2 gap-3">
         {[
-          { label: 'Enregistrements', sub: `${stats.recordings} vidéo${stats.recordings !== 1 ? 's' : ''}`, icon: PlayCircle, to: '/espace/enregistrements', iconColor: 'text-blue-600', bgColor: 'bg-blue-50' },
-          { label: 'Tests', sub: `${stats.testsDone} complété${stats.testsDone !== 1 ? 's' : ''}`, icon: FlaskConical, to: '/espace/tests', iconColor: 'text-purple-600', bgColor: 'bg-purple-50' },
-          { label: 'Ressources', sub: `${stats.docs} document${stats.docs !== 1 ? 's' : ''}`, icon: FileText, to: '/espace/documents', iconColor: 'text-green-600', bgColor: 'bg-green-50' },
-          { label: 'Certificats', sub: `${stats.certifs} obtenu${stats.certifs !== 1 ? 's' : ''}`, icon: Award, to: '/espace/certificat', iconColor: 'text-amber-600', bgColor: 'bg-amber-50' },
-        ].map(({ label, sub, icon: Icon, to, iconColor, bgColor }) => (
-          <Link key={to} to={to} className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3 hover:shadow-sm transition-shadow">
-            <div className={`w-10 h-10 rounded-xl ${bgColor} flex items-center justify-center flex-shrink-0`}>
-              <Icon className={`w-5 h-5 ${iconColor}`} />
+          {
+            label: 'Enregistrements', sub: `${stats.recordings} vidéo${stats.recordings !== 1 ? 's' : ''}`,
+            icon: PlayCircle, to: '/espace/enregistrements',
+            gradient: 'linear-gradient(135deg, #1e40af, #3b82f6)',
+            iconBg: 'rgba(255,255,255,0.15)',
+          },
+          {
+            label: 'Tests', sub: `${stats.testsDone} complété${stats.testsDone !== 1 ? 's' : ''}`,
+            icon: FlaskConical, to: '/espace/tests',
+            gradient: 'linear-gradient(135deg, #6d28d9, #8b5cf6)',
+            iconBg: 'rgba(255,255,255,0.15)',
+          },
+          {
+            label: 'Ressources', sub: `${stats.docs} document${stats.docs !== 1 ? 's' : ''}`,
+            icon: FileText, to: '/espace/documents',
+            gradient: 'linear-gradient(135deg, #065f46, #10b981)',
+            iconBg: 'rgba(255,255,255,0.15)',
+          },
+          {
+            label: 'Certificats', sub: `${stats.certifs} obtenu${stats.certifs !== 1 ? 's' : ''}`,
+            icon: Award, to: '/espace/certificat',
+            gradient: 'linear-gradient(135deg, #92400e, #f59e0b)',
+            iconBg: 'rgba(255,255,255,0.15)',
+          },
+        ].map(({ label, sub, icon: Icon, to, gradient, iconBg }) => (
+          <Link key={to} to={to}
+            className="rounded-2xl p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-all active:scale-[0.97]"
+            style={{ background: gradient }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: iconBg }}>
+              <Icon className="w-5 h-5 text-white" />
             </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-900">{label}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
+            <div>
+              <p className="text-sm font-bold text-white">{label}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>{sub}</p>
             </div>
           </Link>
         ))}
       </div>
 
-      {/* Nouvelles ressources */}
+      {/* ── Nouvelles ressources ── */}
       {recentDocs.length > 0 && (
-        <div className="bg-white rounded-2xl border border-green-100 overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-3.5 border-b border-green-50 bg-green-50/50">
-            <Sparkles className="w-4 h-4 text-green-600" />
+        <div className="rounded-3xl border border-emerald-100 overflow-hidden bg-white shadow-sm">
+          <div className="flex items-center gap-2 px-5 py-3.5 bg-gradient-to-r from-emerald-50 to-green-50 border-b border-emerald-100">
+            <Sparkles className="w-4 h-4 text-emerald-600" />
             <h2 className="font-semibold text-gray-900 text-sm">Nouvelles ressources</h2>
-            <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full border border-green-200">
+            <span className="ml-auto text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold">
               {recentDocs.length} nouveau{recentDocs.length > 1 ? 'x' : ''}
             </span>
           </div>
           <div className="divide-y divide-gray-50">
             {recentDocs.map(doc => (
-              <Link key={doc.id} to="/espace/documents" className="px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50 transition-colors">
-                <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center flex-shrink-0">
-                  <FileText className="w-4 h-4 text-green-600" />
+              <Link key={doc.id} to="/espace/documents"
+                className="px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50 transition-colors">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-4 h-4 text-emerald-600" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">{doc.title}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    Ajouté le {new Date(doc.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
+                    {new Date(doc.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
                   </p>
                 </div>
-                <span className="text-xs text-green-600 font-medium flex-shrink-0">Voir →</span>
+                <ChevronRight className="w-4 h-4 text-emerald-500 flex-shrink-0" />
               </Link>
             ))}
           </div>
         </div>
       )}
 
-      {/* Conseil du jour */}
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-50">
-          <Lightbulb className="w-4 h-4 text-amber-500" />
-          <h2 className="font-semibold text-gray-900 text-sm">Conseil du jour</h2>
-          <span className="ml-auto text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full border border-amber-100">Jour {dayOfYear % TIPS.length + 1}/{TIPS.length}</span>
-        </div>
+      {/* ── Conseil du jour ── */}
+      <div className="rounded-3xl overflow-hidden shadow-sm" style={{ background: 'linear-gradient(135deg, #fffbeb, #fef3c7)' }}>
         <div className="px-5 py-4">
-          <p className="text-sm font-semibold text-gray-900 mb-1">{tip.title}</p>
-          <p className="text-sm text-gray-600 leading-relaxed">{tip.body}</p>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-xl bg-amber-400/20 flex items-center justify-center">
+              <Lightbulb className="w-4 h-4 text-amber-600" />
+            </div>
+            <span className="text-sm font-bold text-amber-900">Conseil du jour</span>
+            <span className="ml-auto text-xs text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full font-medium">
+              {dayOfYear % TIPS.length + 1}/{TIPS.length}
+            </span>
+          </div>
+          <div className="rounded-2xl px-4 py-3 border border-amber-200/60" style={{ background: 'rgba(255,255,255,0.6)' }}>
+            <p className="text-sm font-bold text-amber-900 mb-1">{tip.title}</p>
+            <p className="text-sm text-amber-800/80 leading-relaxed">{tip.body}</p>
+          </div>
         </div>
       </div>
 
-      {/* Prochaines séances */}
+      {/* ── Prochaines séances ── */}
       {nextSessions.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
           <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-50">
-            <Calendar className="w-4 h-4 text-blue-600" />
+            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+              <Calendar className="w-3.5 h-3.5 text-blue-600" />
+            </div>
             <h2 className="font-semibold text-gray-900 text-sm">Prochaines séances</h2>
           </div>
           <div className="divide-y divide-gray-50">
-            {nextSessions.map(s => (
-              <div key={s.id} className="px-5 py-3.5 flex items-start gap-4">
-                <div className="bg-blue-50 rounded-xl px-3 py-2 text-center min-w-[48px]">
-                  <p className="text-xs text-blue-400 font-medium leading-none">{new Date(s.seance_date + 'T00:00:00').toLocaleDateString('fr-FR', { month: 'short' }).toUpperCase()}</p>
-                  <p className="text-lg font-bold text-blue-700 leading-tight">{new Date(s.seance_date + 'T00:00:00').getDate()}</p>
+            {nextSessions.map(s => {
+              const d = new Date(s.seance_date + 'T00:00:00')
+              return (
+                <div key={s.id} className="px-5 py-3.5 flex items-start gap-4">
+                  <div className="rounded-2xl overflow-hidden flex-shrink-0 text-center w-12" style={{ background: 'linear-gradient(135deg, #1D3462, #2a4a8a)' }}>
+                    <p className="text-white/60 text-[9px] font-bold uppercase tracking-wider py-1 border-b border-white/10">
+                      {d.toLocaleDateString('fr-FR', { month: 'short' })}
+                    </p>
+                    <p className="text-white text-lg font-bold py-1">{d.getDate()}</p>
+                  </div>
+                  <div className="flex-1 min-w-0 pt-0.5">
+                    <p className="font-semibold text-gray-900 text-sm">{s.title}</p>
+                    {s.seance_time && <p className="text-xs text-gray-400 mt-0.5">🕐 {s.seance_time}</p>}
+                    {s.location_or_link && (
+                      s.location_or_link.startsWith('http') ? (
+                        <a href={s.location_or_link} target="_blank" rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-blue-600 font-medium mt-1 hover:underline">
+                          Rejoindre <ChevronRight className="w-3 h-3" />
+                        </a>
+                      ) : (
+                        <p className="text-xs text-gray-400 mt-0.5">📍 {s.location_or_link}</p>
+                      )
+                    )}
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 text-sm">{s.title}</p>
-                  {s.seance_time && <p className="text-xs text-gray-400 mt-0.5">{s.seance_time}</p>}
-                  {s.location_or_link && (
-                    s.location_or_link.startsWith('http') ? (
-                      <a href={s.location_or_link} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline mt-0.5 block truncate">Rejoindre →</a>
-                    ) : (
-                      <p className="text-xs text-gray-400 mt-0.5">{s.location_or_link}</p>
-                    )
-                  )}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
 
-      {/* Annonces */}
+      {/* ── Annonces ── */}
       {announcements.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
           <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-50">
-            <Megaphone className="w-4 h-4 text-amber-500" />
+            <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
+              <Megaphone className="w-3.5 h-3.5 text-amber-500" />
+            </div>
             <h2 className="font-semibold text-gray-900 text-sm">Annonces</h2>
+            <span className="ml-auto w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center">
+              {announcements.length}
+            </span>
           </div>
           <div className="divide-y divide-gray-50">
             {announcements.map(a => (
               <div key={a.id} className="px-5 py-4 flex gap-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-2 flex-shrink-0" />
+                <div className="w-1.5 rounded-full bg-gradient-to-b from-amber-400 to-orange-400 flex-shrink-0 mt-1.5 self-stretch" style={{ minHeight: 16 }} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-700 leading-relaxed">{a.content}</p>
-                  <p className="text-xs text-gray-400 mt-1.5">{new Date(a.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                  <p className="text-xs text-gray-400 mt-1.5">
+                    {new Date(a.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </p>
                 </div>
               </div>
             ))}
