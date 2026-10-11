@@ -1,4 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+
+const Router = window.location.protocol === 'file:' ? HashRouter : BrowserRouter
 import { useEffect } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { Loader2 } from 'lucide-react'
@@ -144,7 +146,7 @@ export default function App() {
   }, [user?.id])
 
   return (
-    <BrowserRouter>
+    <Router>
       <Toaster position="top-right" toastOptions={{ style: { borderRadius: '12px', fontSize: '14px' } }} />
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -219,6 +221,6 @@ export default function App() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </BrowserRouter>
+    </Router>
   )
 }
