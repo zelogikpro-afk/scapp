@@ -10,6 +10,10 @@ export default defineConfig({
   base: isCapacitor ? './' : '/',
   plugins: [
     react(),
+    ...(isCapacitor ? [{
+      name: 'remove-crossorigin',
+      transformIndexHtml: (html: string) => html.replace(/ crossorigin/g, ''),
+    }] : []),
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',

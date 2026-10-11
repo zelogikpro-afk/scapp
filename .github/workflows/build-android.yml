@@ -40,8 +40,18 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           CAPACITOR_BUILD: 'true'
 
+      - name: Clean Android web assets
+        run: rm -rf android/app/src/main/assets/public
+
       - name: Sync Capacitor
         run: npx cap sync android
+
+      - name: Verify index.html
+        run: |
+          echo "=== index.html ==="
+          cat android/app/src/main/assets/public/index.html
+          echo "=== assets/ ==="
+          ls android/app/src/main/assets/public/assets/ | head -5
 
       - name: Build APK
         run: |
