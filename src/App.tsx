@@ -1,22 +1,6 @@
-import { BrowserRouter, HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { Component } from 'react'
-import type { ErrorInfo, ReactNode } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 
-const Router = HashRouter
-
-class ErrorBoundary extends Component<{children: ReactNode}, {error: string | null}> {
-  state = { error: null }
-  static getDerivedStateFromError(e: Error) { return { error: e.message + '\n' + e.stack } }
-  componentDidCatch(e: Error, info: ErrorInfo) { console.error('ErrorBoundary:', e, info) }
-  render() {
-    if (this.state.error) return (
-      <div style={{padding:20,background:'#fff',color:'#c00',fontFamily:'monospace',fontSize:12,whiteSpace:'pre-wrap'}}>
-        {this.state.error}
-      </div>
-    )
-    return this.props.children
-  }
-}
+const Router = BrowserRouter
 
 import { useEffect } from 'react'
 import { Toaster } from 'react-hot-toast'
@@ -163,7 +147,6 @@ export default function App() {
   }, [user?.id])
 
   return (
-    <ErrorBoundary>
     <Router>
       <Toaster position="top-right" toastOptions={{ style: { borderRadius: '12px', fontSize: '14px' } }} />
       <Routes>
@@ -240,6 +223,5 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
-    </ErrorBoundary>
   )
 }
