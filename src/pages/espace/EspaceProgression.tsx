@@ -4,21 +4,23 @@ import { learnerApi } from '../../lib/learnerApi'
 import type { LearnerSession } from '../../lib/learnerSession'
 import { CheckCircle, Lock, Trophy, Star, BookOpen, FlaskConical, PlayCircle, FileText, Target } from 'lucide-react'
 
-const TESTS_LIST = ['mapping', 'ie', 'qs', 'compass', 'quiz_coach', 'valeurs']
+const TESTS_LIST = ['mapping', 'ie', 'qs', 'compass', 'valeurs']
 const TEST_LABELS: Record<string, string> = {
-  mapping: 'Test de personnalité', ie: 'Intelligence Émotionnelle', qs: 'Quotient de Succès',
-  compass: 'Test Compass', quiz_coach: 'Quiz Final', valeurs: 'Test des Valeurs',
+  mapping: 'Mapping', ie: 'Intelligence Émotionnelle', qs: 'Quotient de Succès',
+  compass: 'Test Compass', valeurs: 'Test des Valeurs',
 }
 
 interface Stats {
   testsCompleted: number
   totalTests: number
-  docsCount: number
-  recsCount: number
-  sessionsAttended: number
-  totalSessions: number
+  totalDocs: number
+  totalRecordings: number
+  lessonsCompleted: number
+  totalLessons: number
   objectivesCompleted: number
   totalObjectives: number
+  totalDevoirs: number
+  devoirsSubmitted: number
   testResults: { type: string; done: boolean }[]
 }
 
@@ -37,11 +39,9 @@ export default function EspaceProgression() {
       allPromotionIds: promotionIds,
       allLevels: session.allLevels?.length ? session.allLevels : [session.formationLevel],
       participantId: session.participantId || null,
+      participantName: session.participantName || null,
     }) as any
 
-    const sessions = data.sessions || []
-    const now = new Date()
-    const attended = sessions.filter((s: any) => new Date(s.date) < now).length
     const doneTypes = new Set(data.testTypes || [])
     const testResults = TESTS_LIST.map(t => ({ type: t, done: doneTypes.has(t) }))
     const objectives = data.objectives || []
@@ -49,12 +49,14 @@ export default function EspaceProgression() {
     setStats({
       testsCompleted: testResults.filter(t => t.done).length,
       totalTests: TESTS_LIST.length,
-      docsCount: data.docCount || 0,
-      recsCount: data.recordingCount || 0,
-      sessionsAttended: attended,
-      totalSessions: sessions.length,
+      totalDocs: data.totalDocs || 0,
+      totalRecordings: data.totalRecordings || 0,
+      lessonsCompleted: data.lessonsCompleted || 0,
+      totalLessons: data.totalLessons || 0,
       objectivesCompleted: objectives.filter((o: any) => o.status === 'completed').length,
       totalObjectives: objectives.length,
+      totalDevoirs: data.totalDevoirs || 0,
+      devoirsSubmitted: data.devoirsSubmitted || 0,
       testResults,
     })
     setLoading(false)
@@ -63,16 +65,22 @@ export default function EspaceProgression() {
   if (loading) return <div className="text-center py-20 text-gray-400">Chargement…</div>
   if (!stats) return null
 
-  const overallPct = Math.round((
-    (stats.testsCompleted / stats.totalTests) * 0.4 +
-    (stats.sessionsAttended / Math.max(stats.totalSessions, 1)) * 0.4 +
-    (stats.totalObjectives > 0 ? stats.objectivesCompleted / stats.totalObjectives : 0) * 0.2
-  ) * 100)
+  // Only use real per-learner metrics — no fake session attendance
+  const testPct = stats.testsCompleted / stats.totalTests
+  const lessonPct = stats.totalLessons > 0 ? stats.lessonsCompleted / stats.totalLessons : 0
+  const objectivePct = stats.totalObjectives > 0 ? stats.objectivesCompleted / stats.totalObjectives : 0
+
+  // If no lessons data, split weight between tests and objectives
+  const hasLessons = stats.totalLessons > 0
+  const overallPct = Math.round(hasLessons
+    ? (testPct * 0.4 + lessonPct * 0.3 + objectivePct * 0.3) * 100
+    : (testPct * 0.6 + objectivePct * 0.4) * 100
+  )
 
   const badges = [
     { label: 'Premier test', icon: '🧠', earned: stats.testsCompleted >= 1 },
     { label: 'Tous les tests', icon: '🏆', earned: stats.testsCompleted === stats.totalTests },
-    { label: 'Première séance', icon: '🎯', earned: stats.sessionsAttended >= 1 },
+    { label: 'Première leçon', icon: '📚', earned: stats.lessonsCompleted >= 1 },
     { label: 'Mi-parcours', icon: '⭐', earned: overallPct >= 50 },
     { label: 'Parcours complet', icon: '🎓', earned: overallPct >= 90 },
     { label: 'Objectif atteint', icon: '✅', earned: stats.objectivesCompleted >= 1 },
@@ -113,6 +121,7 @@ export default function EspaceProgression() {
 
       {/* Details */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Tests */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <div className="flex items-center gap-2 mb-3">
             <FlaskConical className="w-5 h-5 text-purple-500" />
@@ -129,24 +138,20 @@ export default function EspaceProgression() {
           </div>
         </div>
 
+        {/* Right column */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <PlayCircle className="w-5 h-5 text-blue-500" />
-              <p className="font-semibold text-gray-900 text-sm">Séances ({stats.sessionsAttended} assistées)</p>
+          {/* E-learning lessons */}
+          {stats.totalLessons > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <BookOpen className="w-5 h-5 text-indigo-500" />
+                <p className="font-semibold text-gray-900 text-sm">Leçons e-learning</p>
+              </div>
+              <ProgressBar value={stats.lessonsCompleted} max={stats.totalLessons} color="bg-indigo-500" />
             </div>
-            <ProgressBar value={stats.sessionsAttended} max={stats.totalSessions} color="bg-blue-500" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <FileText className="w-5 h-5 text-green-500" />
-              <p className="font-semibold text-gray-900 text-sm">Ressources disponibles</p>
-            </div>
-            <div className="flex gap-4 text-sm text-gray-600">
-              <span>📄 {stats.docsCount} document{stats.docsCount > 1 ? 's' : ''}</span>
-              <span>🎬 {stats.recsCount} enregistrement{stats.recsCount > 1 ? 's' : ''}</span>
-            </div>
-          </div>
+          )}
+
+          {/* Objectives */}
           {stats.totalObjectives > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-2">
@@ -156,6 +161,29 @@ export default function EspaceProgression() {
               <ProgressBar value={stats.objectivesCompleted} max={stats.totalObjectives} color="bg-orange-500" />
             </div>
           )}
+
+          {/* Devoirs */}
+          {stats.totalDevoirs > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <FileText className="w-5 h-5 text-teal-500" />
+                <p className="font-semibold text-gray-900 text-sm">Devoirs rendus</p>
+              </div>
+              <ProgressBar value={stats.devoirsSubmitted} max={stats.totalDevoirs} color="bg-teal-500" />
+            </div>
+          )}
+
+          {/* Resources (docs + recordings — shown as info, not completion metric) */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <PlayCircle className="w-5 h-5 text-blue-500" />
+              <p className="font-semibold text-gray-900 text-sm">Ressources disponibles</p>
+            </div>
+            <div className="flex gap-4 text-sm text-gray-600">
+              <span>📄 {stats.totalDocs} document{stats.totalDocs !== 1 ? 's' : ''}</span>
+              <span>🎬 {stats.totalRecordings} enregistrement{stats.totalRecordings !== 1 ? 's' : ''}</span>
+            </div>
+          </div>
         </div>
       </div>
 
