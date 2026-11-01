@@ -18,6 +18,13 @@ function getYoutubeId(url: string) {
   const m = url?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/)
   return m ? m[1] : null
 }
+function getDriveEmbedUrl(url: string) {
+  const m = url?.match(/drive\.google\.com\/file\/d\/([^/]+)/)
+  if (m) return `https://drive.google.com/file/d/${m[1]}/preview`
+  const m2 = url?.match(/drive\.google\.com\/open\?id=([^&]+)/)
+  if (m2) return `https://drive.google.com/file/d/${m2[1]}/preview`
+  return null
+}
 function isSupabaseUrl(url: string) { return url?.includes('supabase.co/storage') }
 function isVideoFile(url: string) { return /\.(mp4|webm|ogg|mov)(\?|$)/i.test(url) }
 function isPdfFile(url: string) { return /\.pdf(\?|$)/i.test(url) }
@@ -428,6 +435,7 @@ function LessonPlayer({ lesson, session }: { lesson: Lesson; session: LearnerSes
 
   if (lesson.type === 'video' && url) {
     const ytId = getYoutubeId(url)
+    const driveEmbed = getDriveEmbedUrl(url)
     const isNative = isSupabaseUrl(url) || isVideoFile(url)
 
     if (ytId) return (
@@ -438,6 +446,20 @@ function LessonPlayer({ lesson, session }: { lesson: Lesson; session: LearnerSes
             src={`https://www.youtube.com/embed/${ytId}?rel=0&modestbranding=1&autoplay=0`}
             style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      </VideoWatermark>
+    )
+
+    if (driveEmbed) return (
+      <VideoWatermark name={session.participantName} email={session.email}>
+        <div style={{ aspectRatio: '16/9', width: '100%' }}>
+          <iframe
+            key={lesson.id}
+            src={driveEmbed}
+            style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+            allow="autoplay"
             allowFullScreen
           />
         </div>

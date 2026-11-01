@@ -290,7 +290,7 @@ export default function EspaceAdminCours() {
 /* ── Add lesson inline form ─────────────────────────────────────── */
 function AddLessonForm({ form, setForm, onSubmit, onCancel, saving, uploadProgress, fileRef, onFileChange }: {
   form: any; setForm: any; onSubmit: any; onCancel: any; saving: boolean
-  uploadProgress: number | null; fileRef: React.RefObject<HTMLInputElement>; onFileChange: any
+  uploadProgress: number | null; fileRef: React.RefObject<HTMLInputElement | null>; onFileChange: any
 }) {
   const selectedType = LESSON_TYPES.find(t => t.value === form.type) || LESSON_TYPES[0]
 
@@ -346,11 +346,11 @@ function AddLessonForm({ form, setForm, onSubmit, onCancel, saving, uploadProgre
             </div>
             <input ref={fileRef} type="file" accept="video/*" onChange={onFileChange} style={{ display: 'none' }} />
 
-            {/* OR YouTube URL */}
+            {/* OR external URL */}
             <input
               value={form.content_url.includes('supabase') ? '' : form.content_url}
               onChange={e => setForm((f: any) => ({ ...f, content_url: e.target.value }))}
-              placeholder="… ou coller une URL YouTube / externe"
+              placeholder="… ou coller une URL YouTube / Google Drive"
               style={{ ...inputStyle, fontSize: 12 }}
             />
           </div>
