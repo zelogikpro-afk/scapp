@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'SCAPP',
   webDir: 'dist',
   server: {
-    url: 'https://scapp.ma/espace/',
+    url: 'https://scapp.ma/',
     cleartext: false,
   },
 };
