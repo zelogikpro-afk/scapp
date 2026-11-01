@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, CheckCircle2, Circle, Clock, Trash2, Pencil } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
+import { PageHero, HeroBtn } from '../../components/ui/PageHero'
 import { Button } from '../../components/ui/Button'
 import { Avatar } from '../../components/ui/Avatar'
 import { Modal } from '../../components/ui/Modal'
@@ -27,6 +28,12 @@ const EMPTY = {
 export default function Tasks() {
   const { tasks, updateTask, addTask, deleteTask } = useAppStore()
   const { user } = useAuthStore()
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
   const [showModal, setShowModal] = useState(false)
   const [editTask, setEditTask] = useState<string | null>(null)
   const [form, setForm] = useState({ ...EMPTY })
@@ -67,26 +74,18 @@ export default function Tasks() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Tâches</h2>
-          <p className="text-sm text-gray-500">{tasks.filter(t => t.status !== 'done').length} tâches en attente</p>
-        </div>
-        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => { setEditTask(null); setForm({ ...EMPTY }); setShowModal(true) }}>Nouvelle tâche</Button>
-      </div>
-
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { id: 'todo', label: 'À faire' },
-          { id: 'in_progress', label: 'En cours' },
-          { id: 'done', label: 'Terminé' },
-        ].map(col => (
-          <Card key={col.id}>
-            <p className="text-xs text-gray-500">{col.label}</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">{byStatus(col.id).length}</p>
-          </Card>
-        ))}
-      </div>
+      <PageHero
+        emoji="✅"
+        title="Tâches"
+        sub={`${tasks.filter(t => t.status !== 'done').length} tâches en attente`}
+        gradient="linear-gradient(135deg, #1e3a5f 0%, #2563eb 60%, #60a5fa 100%)"
+        actions={<HeroBtn onClick={() => { setEditTask(null); setForm({ ...EMPTY }); setShowModal(true) }}>+ Nouvelle tâche</HeroBtn>}
+        stats={[
+          { label: 'À faire', value: byStatus('todo').length },
+          { label: 'En cours', value: byStatus('in_progress').length },
+          { label: 'Terminées', value: byStatus('done').length },
+        ]}
+      />
 
       <div className="space-y-2">
         {tasks.map(task => (

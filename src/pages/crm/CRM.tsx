@@ -1,12 +1,11 @@
-import { useState, useMemo, useEffect } from 'react'
+﻿import React, { useState, useMemo, useEffect } from 'react'
 import { Plus, Search, Upload, List, Columns, Eye, Phone, MessageCircle, Mail, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
 import DateRangeFilter, { type Preset, type DateRange, getRange, inRange } from '../../components/ui/DateRangeFilter'
-import { Card } from '../../components/ui/Card'
+import { PageHero, HeroBtn } from '../../components/ui/PageHero'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Avatar } from '../../components/ui/Avatar'
-import { Table, Thead, Th, Tbody, Tr, Td } from '../../components/ui/Table'
 import { useAppStore } from '../../store/appStore'
 import { formatDate, timeAgo } from '../../lib/utils'
 import type { Lead, LeadStatus } from '../../types'
@@ -96,6 +95,12 @@ function KanbanView({ leads, onSelect }: { leads: Lead[]; onSelect: (lead: Lead)
 export default function CRM() {
   const { leads, profiles, updateLead, fetchLeads, fetchProfiles } = useAppStore()
   useEffect(() => { if (profiles.length === 0) fetchProfiles() }, [])
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all')
   const [sourceFilter, setSourceFilter] = useState('all')
@@ -180,103 +185,125 @@ export default function CRM() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">CRM — Leads</h2>
-          <p className="text-sm text-gray-500 mt-0.5">{leads.length} leads au total</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" icon={<RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />} onClick={syncMeta} disabled={syncing}>
-            {syncing ? 'Sync…' : 'Sync Meta'}
-          </Button>
-          <Button variant="outline" icon={<Upload className="w-4 h-4" />} onClick={() => setShowImport(true)}>
-            Importer fichier
-          </Button>
-          <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setShowAdd(true)}>
-            Nouveau lead
-          </Button>
-        </div>
-      </div>
+      <PageHero
+        emoji="👥"
+        title="CRM — Leads"
+        sub={`${leads.length} leads au total · ${filtered.length} filtrés`}
+        gradient="linear-gradient(135deg, #0A1628 0%, #1A73E8 60%, #4F94F0 100%)"
+        actions={<>
+          {!isMobile && <HeroBtn outlined onClick={syncMeta}>{syncing ? '⟳ Sync…' : '⟳ Sync Meta'}</HeroBtn>}
+          {!isMobile && <HeroBtn outlined onClick={() => setShowImport(true)}>↑ Importer</HeroBtn>}
+          <HeroBtn onClick={() => setShowAdd(true)}>+ Nouveau lead</HeroBtn>
+        </>}
+        stats={[
+          { label: 'Inscrits', value: leads.filter(l => l.status === 'registered').length },
+          { label: 'Intéressés', value: leads.filter(l => l.status === 'interested').length },
+          { label: 'Relances', value: leads.filter(l => l.nextFollowUpDate && l.nextFollowUpDate <= new Date().toISOString().slice(0,10)).length },
+        ]}
+      />
 
       {/* Status Summary */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
         {KANBAN_ORDER.map(status => {
           const config = STATUS_CONFIG[status]
           const count = leads.filter(l => l.status === status).length
+          const isActive = statusFilter === status
+          const PILL_COLORS: Record<string, { bg: string; text: string; activeBg: string }> = {
+            new: { bg: '#EFF6FF', text: '#1A73E8', activeBg: '#1A73E8' },
+            to_contact: { bg: '#F0F9FF', text: '#0284C7', activeBg: '#0284C7' },
+            contacted: { bg: '#FFFBEB', text: '#D97706', activeBg: '#D97706' },
+            no_answer: { bg: '#F8FAFC', text: '#64748B', activeBg: '#64748B' },
+            callback: { bg: '#FFF7ED', text: '#EA580C', activeBg: '#EA580C' },
+            interested: { bg: '#F0FDF4', text: '#16A34A', activeBg: '#16A34A' },
+            appointment: { bg: '#F5F3FF', text: '#7C3AED', activeBg: '#7C3AED' },
+            pending_payment: { bg: '#FEFCE8', text: '#CA8A04', activeBg: '#CA8A04' },
+            registered: { bg: '#FAF5FF', text: '#9333EA', activeBg: '#9333EA' },
+            not_interested: { bg: '#FEF2F2', text: '#DC2626', activeBg: '#DC2626' },
+          }
+          const c = PILL_COLORS[status] || { bg: '#F8FAFC', text: '#64748B', activeBg: '#64748B' }
           return (
             <button
               key={status}
               onClick={() => setStatusFilter(statusFilter === status ? 'all' : status)}
-              className={`p-3 rounded-xl border text-center transition-all ${statusFilter === status ? config.bg + ' ring-2 ring-offset-1 ring-blue-500' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:border-gray-300'}`}
+              style={{
+                flexShrink: 0,
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '7px 14px',
+                borderRadius: 99,
+                border: isActive ? 'none' : `1.5px solid ${c.bg === '#F8FAFC' ? '#E2ECF8' : c.bg}`,
+                background: isActive ? c.activeBg : c.bg,
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
             >
-              <div className="text-xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{count}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{config.label}</div>
+              <span style={{ fontSize: 14, fontWeight: 800, color: isActive ? '#fff' : c.text, lineHeight: 1 }}>{count}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? 'rgba(255,255,255,0.85)' : c.text, whiteSpace: 'nowrap' }}>{config.label}</span>
             </button>
           )
         })}
       </div>
 
-      {/* Filters & View Toggle */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex-1 min-w-48">
-          <Input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1) }}
-            placeholder="Rechercher un lead…"
-            icon={<Search className="w-4 h-4" />}
-          />
+      {/* Filters Grid */}
+      <div style={{ background: '#F8FAFF', borderRadius: 18, border: '1px solid #E2ECF8', padding: '14px 16px' }}>
+        {/* Row 1: Search + Date + View toggle */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
+          <div style={{ flex: 1 }}>
+            <Input
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1) }}
+              placeholder="Rechercher un lead…"
+              icon={<Search className="w-4 h-4" />}
+            />
+          </div>
+          <DateRangeFilter value={preset} onChange={handleDateChange} />
+          <div style={{ display: 'flex', borderRadius: 10, border: '1.5px solid #E2ECF8', overflow: 'hidden', flexShrink: 0 }}>
+            <button onClick={() => setViewMode('table')} style={{ padding: '8px 10px', background: viewMode === 'table' ? '#1A73E8' : '#fff', color: viewMode === 'table' ? '#fff' : '#6B88A8', border: 'none', cursor: 'pointer' }}>
+              <List className="w-4 h-4" />
+            </button>
+            <button onClick={() => setViewMode('kanban')} style={{ padding: '8px 10px', background: viewMode === 'kanban' ? '#1A73E8' : '#fff', color: viewMode === 'kanban' ? '#fff' : '#6B88A8', border: 'none', cursor: 'pointer' }}>
+              <Columns className="w-4 h-4" />
+            </button>
+          </div>
         </div>
-        <DateRangeFilter value={preset} onChange={handleDateChange} />
-        <select
-          value={statusFilter}
-          onChange={e => { setStatusFilter(e.target.value as any); setPage(1) }}
-          className="text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">Tous les statuts</option>
-          {KANBAN_ORDER.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
-        </select>
-        <select
-          value={sourceFilter}
-          onChange={e => { setSourceFilter(e.target.value); setPage(1) }}
-          className="text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {sources.map(s => <option key={s} value={s}>{s === 'all' ? 'Toutes les sources' : s}</option>)}
-        </select>
-        <select
-          value={delaiFilter}
-          onChange={e => { setDelaiFilter(e.target.value as any); setPage(1) }}
-          className="text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">Tous les délais</option>
-          <option value="high">🔴 Urgent (immédiat)</option>
-          <option value="medium">🟠 Moyen (1-3 mois)</option>
-          <option value="low">🟢 Plus tard</option>
-        </select>
-        <select
-          value={programFilter}
-          onChange={e => { setProgramFilter(e.target.value as any); setPage(1) }}
-          className="text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">Toutes les formations</option>
-          <option value="coaching_adulte">🎓 Formation Coach de Vie</option>
-          <option value="classes_avenir">🏫 Les Classes de l'Avenir</option>
-        </select>
-        <select
-          value={agentFilter}
-          onChange={e => { setAgentFilter(e.target.value); setPage(1) }}
-          className="text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">Tous les agents</option>
-          <option value="__unassigned__">— Non assignés</option>
-          {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <button onClick={() => setViewMode('table')} className={`p-2 transition-colors ${viewMode === 'table' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-900 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
-            <List className="w-4 h-4" />
-          </button>
-          <button onClick={() => setViewMode('kanban')} className={`p-2 transition-colors ${viewMode === 'kanban' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-900 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
-            <Columns className="w-4 h-4" />
-          </button>
+        {/* Row 2: 3-column select grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {([
+            { value: statusFilter, onChange: (v: string) => { setStatusFilter(v as any); setPage(1) }, children: (
+              <>
+                <option value="all">Tous les statuts</option>
+                {KANBAN_ORDER.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
+              </>
+            )},
+            { value: sourceFilter, onChange: (v: string) => { setSourceFilter(v); setPage(1) }, children: (
+              <>{sources.map(s => <option key={s} value={s}>{s === 'all' ? 'Toutes les sources' : s}</option>)}</>
+            )},
+            { value: delaiFilter, onChange: (v: string) => { setDelaiFilter(v as any); setPage(1) }, children: (
+              <>
+                <option value="all">Tous les délais</option>
+                <option value="high">🔴 Urgent</option>
+                <option value="medium">🟠 Moyen terme</option>
+                <option value="low">🟢 Plus tard</option>
+              </>
+            )},
+            { value: programFilter, onChange: (v: string) => { setProgramFilter(v as any); setPage(1) }, children: (
+              <>
+                <option value="all">Toutes les formations</option>
+                <option value="coaching_adulte">🎓 Coach de Vie</option>
+                <option value="classes_avenir">🏫 Classes de l'Avenir</option>
+              </>
+            )},
+            { value: agentFilter, onChange: (v: string) => { setAgentFilter(v); setPage(1) }, children: (
+              <>
+                <option value="all">Tous les agents</option>
+                <option value="__unassigned__">— Non assignés</option>
+                {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </>
+            )},
+          ] as { value: string; onChange: (v: string) => void; children: React.ReactNode }[]).map((sel, i) => (
+            <select key={i} value={sel.value} onChange={e => sel.onChange(e.target.value)}
+              style={{ fontSize: 13, fontWeight: 600, color: '#0A1628', border: '1.5px solid #E2ECF8', borderRadius: 10, padding: '8px 12px', background: '#fff', outline: 'none', width: '100%' }}>
+              {sel.children}
+            </select>
+          ))}
         </div>
       </div>
 
@@ -284,112 +311,85 @@ export default function CRM() {
       {viewMode === 'kanban' ? (
         <KanbanView leads={filtered} onSelect={setSelectedLead} />
       ) : (
-        <Card padding="none">
-          <Table>
-            <Thead>
-              <tr>
-                <Th><button className="flex items-center gap-0.5 hover:text-blue-600 transition-colors select-none" onClick={() => handleSort('name')}>Lead <SortIcon k="name" /></button></Th>
-                <Th>Contact</Th>
-                <Th><button className="flex items-center gap-0.5 hover:text-blue-600 transition-colors select-none" onClick={() => handleSort('source')}>Source <SortIcon k="source" /></button></Th>
-                <Th><button className="flex items-center gap-0.5 hover:text-blue-600 transition-colors select-none" onClick={() => handleSort('status')}>Statut <SortIcon k="status" /></button></Th>
-                <Th><button className="flex items-center gap-0.5 hover:text-blue-600 transition-colors select-none" onClick={() => handleSort('delai')}>Délai action <SortIcon k="delai" /></button></Th>
-                <Th>Assigné à</Th>
-                <Th>Dernière action</Th>
-                <Th><button className="flex items-center gap-0.5 hover:text-blue-600 transition-colors select-none" onClick={() => handleSort('followup')}>Prochain rappel <SortIcon k="followup" /></button></Th>
-                <Th><button className="flex items-center gap-0.5 hover:text-blue-600 transition-colors select-none" onClick={() => handleSort('date')}>Réception <SortIcon k="date" /></button></Th>
-                <Th> </Th>
-              </tr>
-            </Thead>
-            <Tbody>
-              {paginated.map(lead => (
-                <Tr key={lead.id} onClick={() => setSelectedLead(lead)}>
-                  <Td>
-                    <div className="flex items-center gap-3">
-                      <Avatar name={`${lead.firstName} ${lead.lastName}`} size="sm" />
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-gray-100">{lead.firstName} {lead.lastName}</p>
-                        {lead.campaign && <p className="text-xs text-gray-400 truncate max-w-40">{lead.campaign}</p>}
-                      </div>
-                    </div>
-                  </Td>
-                  <Td>
-                    <div className="flex items-center gap-2.5 text-gray-400">
-                      <span className="text-xs text-gray-600 dark:text-gray-300">{lead.phone}</span>
-                      {lead.whatsapp && <MessageCircle className="w-3.5 h-3.5 text-emerald-500" />}
-                      {lead.email && <Mail className="w-3.5 h-3.5 text-blue-400" />}
-                    </div>
-                  </Td>
-                  <Td><span className="text-xs font-medium">{lead.source}</span></Td>
-                  <Td>
-                    <Badge variant={STATUS_CONFIG[lead.status].color} dot>
-                      {STATUS_CONFIG[lead.status].label}
-                    </Badge>
-                  </Td>
-                  <Td>
-                    {lead.interestLevel === 'high' && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">🔴 Urgent</span>}
-                    {lead.interestLevel === 'medium' && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">🟠 Moyen</span>}
-                    {lead.interestLevel === 'low' && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">🟢 Plus tard</span>}
-                    {!lead.interestLevel && <span className="text-gray-300 text-xs">—</span>}
-                  </Td>
-                  <Td>
-                    {lead.assignedToName
-                      ? <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 dark:text-gray-300">
-                          <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                            {lead.assignedToName.charAt(0).toUpperCase()}
-                          </span>
-                          {lead.assignedToName.split(' ')[0]}
-                        </span>
-                      : <span className="text-gray-300 text-xs">—</span>}
-                  </Td>
-                  <Td>
-                    {lead.lastTouchedBy
-                      ? <div className="text-xs">
-                          <div className="font-medium text-gray-700 dark:text-gray-300">{lead.lastTouchedBy.split(' ')[0]}</div>
-                          <div className="text-gray-400">{timeAgo(lead.lastTouchedAt ?? '')}</div>
-                        </div>
-                      : <span className="text-gray-300 text-xs">—</span>}
-                  </Td>
-                  <Td>
-                    {lead.nextFollowUpDate
-                      ? <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">{formatDate(lead.nextFollowUpDate)}</span>
-                      : <span className="text-gray-300">—</span>}
-                  </Td>
-                  <Td>
-                    <div className="text-xs">
-                      <div className="text-gray-700 dark:text-gray-300 font-medium">
-                        {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
-                      </div>
-                      <div className="text-gray-400">
-                        {lead.createdAt ? new Date(lead.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}
-                      </div>
-                    </div>
-                  </Td>
-                  <Td>
-                    <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setSelectedLead(lead) }}>
-                      <Eye className="w-4 h-4" />
-                    </Button>
-                  </Td>
-                </Tr>
-              ))}
-              {paginated.length === 0 && (
-                <Tr>
-                  <Td className="text-center text-gray-400 py-12" colSpan={10 as any}>Aucun lead trouvé</Td>
-                </Tr>
-              )}
-            </Tbody>
-          </Table>
-
+        <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #E2ECF8', boxShadow: '0 2px 12px rgba(26,115,232,0.06)', overflow: 'hidden' }}>
+          {/* List */}
+          {paginated.map((lead, i) => {
+            const sc = STATUS_CONFIG[lead.status]
+            const BADGE_STYLES: Record<string, { bg: string; color: string }> = {
+              info:    { bg: '#EFF6FF', color: '#1A73E8' },
+              success: { bg: '#F0FDF4', color: '#16A34A' },
+              warning: { bg: '#FFF7ED', color: '#EA580C' },
+              danger:  { bg: '#FEF2F2', color: '#DC2626' },
+              default: { bg: '#F8FAFC', color: '#64748B' },
+              purple:  { bg: '#FAF5FF', color: '#9333EA' },
+            }
+            const bs = BADGE_STYLES[sc.color] || BADGE_STYLES.default
+            return (
+              <div
+                key={lead.id}
+                onClick={() => setSelectedLead(lead)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '14px 18px',
+                  borderBottom: i < paginated.length - 1 ? '1px solid #F0F7FF' : 'none',
+                  cursor: 'pointer', transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#FAFCFF')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <Avatar name={`${lead.firstName} ${lead.lastName}`} size="md" />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontWeight: 700, fontSize: 14, color: '#0A1628', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {lead.firstName} {lead.lastName}
+                  </p>
+                  <p style={{ fontSize: 12, color: '#6B88A8', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {lead.source}{lead.campaign ? ` · ${lead.campaign}` : ''}
+                  </p>
+                  <p style={{ fontSize: 11, color: '#94A3B8', margin: '1px 0 0' }}>
+                    {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
+                    {lead.nextFollowUpDate ? ` · 📅 ${lead.nextFollowUpDate}` : ''}
+                  </p>
+                </div>
+                {/* Actions */}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                  <a href={`tel:${lead.phone}`} onClick={e => e.stopPropagation()}
+                    style={{ width: 32, height: 32, borderRadius: 10, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1A73E8', textDecoration: 'none' }}>
+                    <Phone className="w-3.5 h-3.5" />
+                  </a>
+                  {lead.whatsapp && (
+                    <a href={`https://wa.me/${lead.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                      style={{ width: 32, height: 32, borderRadius: 10, background: '#F0FDF4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16A34A', textDecoration: 'none' }}>
+                      <MessageCircle className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                  {lead.email && (
+                    <a href={`mailto:${lead.email}`} onClick={e => e.stopPropagation()}
+                      style={{ width: 32, height: 32, borderRadius: 10, background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', textDecoration: 'none' }}>
+                      <Mail className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                </div>
+                {/* Status badge */}
+                <span style={{ padding: '4px 12px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: bs.bg, color: bs.color, flexShrink: 0, whiteSpace: 'nowrap' }}>
+                  {sc.label}
+                </span>
+              </div>
+            )
+          })}
+          {paginated.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '64px 16px', color: '#94A3B8', fontSize: 14 }}>Aucun lead trouvé</div>
+          )}
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-800">
-              <span className="text-xs text-gray-400">{filtered.length} résultats · Page {page}/{totalPages}</span>
+            <div className="flex items-center justify-between px-4 py-3 border-t border-[#F0F7FF]">
+              <span className="text-xs text-[#6B88A8]">{filtered.length} résultats · Page {page}/{totalPages}</span>
               <div className="flex gap-1">
                 <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Précédent</Button>
                 <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>Suivant</Button>
               </div>
             </div>
           )}
-        </Card>
+        </div>
       )}
 
       {/* Lead Detail Modal */}

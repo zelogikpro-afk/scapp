@@ -11,15 +11,25 @@ type Step = 'intro' | 'info' | 'questions' | 'result'
 const NAVY = '#1D3461'
 const TEAL = '#4AB5BD'
 
+const SCALE_COLORS = [
+  { bg: '#fee2e2', text: '#991b1b', sel: '#dc2626' },
+  { bg: '#fef9c3', text: '#854d0e', sel: '#d97706' },
+  { bg: '#f0f9fa', text: '#0e7490', sel: '#0891b2' },
+  { bg: '#dbeafe', text: '#1e40af', sel: '#2563eb' },
+  { bg: '#dcfce7', text: '#166534', sel: '#16a34a' },
+]
+
 export default function TestCompassPage() {
-  const [step, setStep]       = useState<Step>('intro')
-  const [firstName, setFirst] = useState('')
-  const [lastName, setLast]   = useState('')
-  const [email, setEmail]     = useState('')
-  const [phone, setPhone]     = useState('')
-  const [answers, setAnswers] = useState<Record<number, number>>({})
-  const [saving, setSaving]   = useState(false)
-  const [profile, setProfile] = useState<CompassProfileKey | null>(null)
+  const [step, setStep]         = useState<Step>('intro')
+  const [firstName, setFirst]   = useState('')
+  const [lastName, setLast]     = useState('')
+  const [email, setEmail]       = useState('')
+  const [phone, setPhone]       = useState('')
+  const [answers, setAnswers]   = useState<Record<number, number>>({})
+  const [currentQ, setCurrentQ] = useState(0)
+  const [transitioning, setTransitioning] = useState(false)
+  const [saving, setSaving]     = useState(false)
+  const [profile, setProfile]   = useState<CompassProfileKey | null>(null)
   const [fromSession, setFromSession] = useState(false)
   const [participantId, setParticipantId] = useState<string | null>(null)
 
@@ -38,39 +48,37 @@ export default function TestCompassPage() {
     } catch { /* ignore */ }
   }, [])
 
-  const answered    = Object.keys(answers).length
-  const total       = COMPASS_QUESTIONS.length
-  const allAnswered = answered === total
-  const pct         = Math.round((answered / total) * 100)
-
-  function answer(qId: number, val: number) {
-    setAnswers(prev => ({ ...prev, [qId]: val }))
+  function selectAnswer(qId: number, val: number, isLast: boolean) {
+    if (transitioning) return
+    const newAnswers = { ...answers, [qId]: val }
+    setAnswers(newAnswers)
+    if (!isLast) {
+      setTransitioning(true)
+      setTimeout(() => {
+        setCurrentQ(q => q + 1)
+        setTransitioning(false)
+      }, 220)
+    } else {
+      submitDirect(newAnswers)
+    }
   }
 
-  async function submit() {
-    if (!allAnswered) return
+  async function submitDirect(finalAnswers: Record<number, number>) {
     setSaving(true)
-    const dominant = getDominantProfile(answers)
-    const scores   = getAllScores(answers)
-
-    await supabase.from('test_results').insert({
-      test_type:        'compass',
-      participant_id:   participantId,
-      first_name:       firstName,
-      last_name:        lastName,
-      email:            email || null,
-      phone:            phone || null,
-      scores,
-      dominant_profile: dominant,
-      answers,
-    })
-
+    const dominant = getDominantProfile(finalAnswers)
+    const scores   = getAllScores(finalAnswers)
     setProfile(dominant)
     setSaving(false)
     setStep('result')
+    supabase.from('test_results').insert({
+      test_type: 'compass', participant_id: participantId,
+      first_name: firstName, last_name: lastName,
+      email: email || null, phone: phone || null,
+      scores, dominant_profile: dominant, answers: finalAnswers,
+    }).then(({ error }) => { if (error) console.error('Compass insert error:', error) })
   }
 
-  // ── INTRO ──────────────────────────────────────────────────────────────────
+  // ── INTRO ────────────────────────────────────────────────────────────────
   if (step === 'intro') return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ maxWidth: 560, width: '100%', background: '#fff', borderRadius: 20, padding: 48, boxShadow: '0 4px 32px rgba(0,0,0,0.08)' }}>
@@ -110,7 +118,7 @@ export default function TestCompassPage() {
     </div>
   )
 
-  // ── INFO ──────────────────────────────────────────────────────────────────
+  // ── INFO ─────────────────────────────────────────────────────────────────
   if (step === 'info') return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ maxWidth: 480, width: '100%', background: '#fff', borderRadius: 20, padding: 40, boxShadow: '0 4px 32px rgba(0,0,0,0.08)' }}>
@@ -141,86 +149,87 @@ export default function TestCompassPage() {
     </div>
   )
 
-  // ── QUESTIONS ──────────────────────────────────────────────────────────────
-  if (step === 'questions') return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
-      {/* Sticky header */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 10, background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '12px 24px' }}>
-        <div style={{ maxWidth: 700, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 16 }}>
-          <img src="/logo.png" alt="" style={{ width: 32, height: 32, objectFit: 'contain' }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 12, color: '#666', fontWeight: 600 }}>Test Compass</span>
-              <span style={{ fontSize: 12, color: TEAL, fontWeight: 700 }}>{answered}/{total} réponses</span>
+  // ── QUESTIONS (une par une) ───────────────────────────────────────────────
+  if (step === 'questions') {
+    if (saving) return (
+      <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 48, height: 48, border: `4px solid ${TEAL}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 16px' }} />
+          <p style={{ color: NAVY, fontWeight: 700 }}>Calcul de votre profil…</p>
+        </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    )
+
+    const q = COMPASS_QUESTIONS[currentQ]
+    const isLast = currentQ === COMPASS_QUESTIONS.length - 1
+    const selected = answers[q.id]
+    const pct = Math.round(((currentQ + (selected !== undefined ? 1 : 0)) / COMPASS_QUESTIONS.length) * 100)
+
+    return (
+      <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', flexDirection: 'column', opacity: transitioning ? 0.35 : 1, transition: 'opacity 0.15s' }}>
+        {/* Progress header */}
+        <div style={{ background: NAVY, padding: '14px 20px', flexShrink: 0 }}>
+          <div style={{ maxWidth: 560, margin: '0 auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#fff', fontSize: 13, marginBottom: 8 }}>
+              <span style={{ opacity: 0.7, fontWeight: 600 }}>Test Compass</span>
+              <span style={{ fontWeight: 700 }}>{currentQ + 1} / {COMPASS_QUESTIONS.length}</span>
             </div>
-            <div style={{ height: 6, background: '#e5e7eb', borderRadius: 99 }}>
-              <div style={{ height: '100%', borderRadius: 99, background: `linear-gradient(to right, ${TEAL}, ${NAVY})`, width: `${pct}%`, transition: 'width 0.3s' }} />
+            <div style={{ height: 5, background: 'rgba(255,255,255,0.2)', borderRadius: 3 }}>
+              <div style={{ height: '100%', width: `${pct}%`, background: `linear-gradient(to right, ${TEAL}, #7c3aed)`, borderRadius: 3, transition: 'width 0.3s' }} />
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Questions */}
-      <div style={{ maxWidth: 700, margin: '0 auto', padding: '32px 24px 120px' }}>
-        {COMPASS_QUESTIONS.map((q, idx) => {
-          const selected = answers[q.id]
-          return (
-            <div key={q.id} style={{ background: '#fff', borderRadius: 16, padding: '24px 28px', marginBottom: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: selected ? `2px solid ${TEAL}` : '2px solid transparent' }}>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 18 }}>
-                <span style={{ minWidth: 28, height: 28, borderRadius: '50%', background: NAVY, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{idx + 1}</span>
-                <p style={{ margin: 0, fontSize: 15, color: '#222', lineHeight: 1.6, fontWeight: 500 }}>{q.text}</p>
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {COMPASS_SCALE.map(opt => {
-                  const isSelected = selected === opt.value
-                  return (
-                    <button key={opt.value} onClick={() => answer(q.id, opt.value)} style={{
-                      flex: 1, minWidth: 100, padding: '10px 8px', borderRadius: 10,
-                      border: `2px solid ${isSelected ? NAVY : '#e5e7eb'}`,
-                      background: isSelected ? NAVY : '#f9fafb',
-                      color: isSelected ? '#fff' : '#555',
-                      fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
+        {/* Question card */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 20px' }}>
+          <div style={{ maxWidth: 560, width: '100%' }}>
+            <p style={{ fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.55, marginBottom: 32 }}>
+              {q.text}
+            </p>
+
+            {/* Scale buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {COMPASS_SCALE.map((opt, idx) => {
+                const c = SCALE_COLORS[idx]
+                const isSelected = selected === opt.value
+                return (
+                  <button key={opt.value} onClick={() => selectAnswer(q.id, opt.value, isLast)}
+                    style={{
+                      padding: '15px 20px', borderRadius: 14, border: 'none',
+                      background: isSelected ? c.sel : c.bg,
+                      color: isSelected ? '#fff' : c.text,
+                      fontSize: 15, fontWeight: 700, cursor: 'pointer',
+                      transition: 'background 0.15s, color 0.15s',
                       textAlign: 'center',
                     }}>
-                      <div style={{ fontSize: 16, marginBottom: 2 }}>{opt.value}</div>
-                      {opt.label}
-                    </button>
-                  )
-                })}
-              </div>
+                    {opt.label}
+                  </button>
+                )
+              })}
             </div>
-          )
-        })}
-      </div>
 
-      {/* Bottom CTA */}
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid #e5e7eb', padding: '16px 24px' }}>
-        <div style={{ maxWidth: 700, margin: '0 auto' }}>
-          <p style={{ textAlign: 'center', color: '#f59e0b', fontSize: 13, marginBottom: 8, fontWeight: 600, visibility: allAnswered ? 'hidden' : 'visible' }}>
-            {total - answered} question{total - answered > 1 ? 's' : ''} sans réponse
-          </p>
-          <button onClick={submit} disabled={!allAnswered || saving} style={{
-            width: '100%', padding: '14px 0', borderRadius: 12, border: 'none',
-            background: allAnswered ? NAVY : '#d1d5db', color: '#fff',
-            fontSize: 16, fontWeight: 700, cursor: allAnswered ? 'pointer' : 'not-allowed',
-          }}>
-            {saving ? 'Enregistrement…' : 'Voir mes résultats →'}
-          </button>
+            {currentQ > 0 && (
+              <button onClick={() => setCurrentQ(q => q - 1)}
+                style={{ marginTop: 20, background: 'none', border: 'none', color: '#94a3b8', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+                ← Question précédente
+              </button>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  )
+    )
+  }
 
-  // ── RESULT ──────────────────────────────────────────────────────────────────
+  // ── RESULT ───────────────────────────────────────────────────────────────
   if (step === 'result' && profile) {
-    const prof  = COMPASS_PROFILES[profile]
+    const prof   = COMPASS_PROFILES[profile]
     const scores = getAllScores(answers)
     const sorted = Object.entries(scores).sort(([, a], [, b]) => b - a) as [CompassProfileKey, number][]
 
     return (
       <div style={{ minHeight: '100vh', background: '#f8fafc', padding: '32px 24px 60px' }}>
         <div style={{ maxWidth: 680, margin: '0 auto' }}>
-          {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
             <img src="/logo.png" alt="" style={{ width: 48, height: 48, objectFit: 'contain' }} />
             <div>
@@ -229,19 +238,13 @@ export default function TestCompassPage() {
             </div>
           </div>
 
-          {/* Dominant profile card */}
           <div style={{ background: `linear-gradient(135deg, ${prof.color}15, ${prof.color}30)`, border: `2px solid ${prof.color}`, borderRadius: 20, padding: 32, marginBottom: 24, textAlign: 'center' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 3, color: prof.color, textTransform: 'uppercase', marginBottom: 8 }}>
-              Votre profil dominant
-            </div>
-            <div style={{ display: 'inline-block', background: prof.color, color: '#fff', borderRadius: 12, padding: '6px 20px', fontSize: 14, fontWeight: 700, marginBottom: 12 }}>
-              {prof.label}
-            </div>
+            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 3, color: prof.color, textTransform: 'uppercase', marginBottom: 8 }}>Votre profil dominant</div>
+            <div style={{ display: 'inline-block', background: prof.color, color: '#fff', borderRadius: 12, padding: '6px 20px', fontSize: 14, fontWeight: 700, marginBottom: 12 }}>{prof.label}</div>
             <div style={{ fontSize: 28, fontWeight: 900, color: NAVY, marginBottom: 16 }}>{prof.name}</div>
             <p style={{ color: '#555', lineHeight: 1.8, margin: 0, fontSize: 15 }}>{prof.traits}</p>
           </div>
 
-          {/* Points forts + Zones dev */}
           {!fromSession && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
             <div style={{ background: '#fff', borderRadius: 16, padding: 24, boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
               <div style={{ fontWeight: 800, color: '#16a34a', marginBottom: 10, fontSize: 14 }}>✦ Points forts</div>
@@ -253,12 +256,11 @@ export default function TestCompassPage() {
             </div>
           </div>}
 
-          {/* All scores bar chart */}
           {!fromSession && <div style={{ background: '#fff', borderRadius: 16, padding: 24, boxShadow: '0 1px 6px rgba(0,0,0,0.06)', marginBottom: 24 }}>
             <div style={{ fontWeight: 800, color: NAVY, marginBottom: 16, fontSize: 15 }}>Tous vos scores</div>
             {sorted.map(([pk, sc]) => {
               const p = COMPASS_PROFILES[pk]
-              const maxSc = COMPASS_PROFILES[pk] && (Object.keys(scores).length > 0) ? Math.max(...Object.values(scores)) : 1
+              const maxSc = Math.max(...Object.values(scores))
               const barPct = maxSc > 0 ? Math.round((sc / maxSc) * 100) : 0
               return (
                 <div key={pk} style={{ marginBottom: 10 }}>
@@ -276,20 +278,14 @@ export default function TestCompassPage() {
             })}
           </div>}
 
-          {/* PDF Download */}
           <div style={{ background: '#fff', borderRadius: 16, padding: 24, boxShadow: '0 1px 6px rgba(0,0,0,0.06)', textAlign: 'center' }}>
             <div style={{ fontWeight: 700, color: NAVY, marginBottom: 8, fontSize: 16 }}>Télécharger votre rapport détaillé</div>
             <p style={{ color: '#777', fontSize: 13, marginBottom: 20 }}>
-              Votre rapport personnalisé contient votre profil complet, vos stratégies de collaboration et vos axes d'évolution.
+              Votre rapport personnalisé contient votre profil complet, vos stratégies et vos axes d'évolution.
             </p>
-            <a
-              href={`/pdfs/compass/${encodeURIComponent(prof.pdfFile)}`}
+            <a href={`/pdfs/compass/${encodeURIComponent(prof.pdfFile)}`}
               download={`TEST COMPASS_${firstName} ${lastName.toUpperCase()}.pdf`}
-              style={{
-                display: 'inline-block', padding: '14px 40px', background: NAVY, color: '#fff',
-                borderRadius: 12, fontWeight: 700, fontSize: 15, textDecoration: 'none',
-              }}
-            >
+              style={{ display: 'inline-block', padding: '14px 40px', background: NAVY, color: '#fff', borderRadius: 12, fontWeight: 700, fontSize: 15, textDecoration: 'none' }}>
               ↓ Télécharger mon rapport PDF
             </a>
           </div>

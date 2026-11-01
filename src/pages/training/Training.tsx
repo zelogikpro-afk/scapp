@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Card } from '../../components/ui/Card'
+import { PageHero, HeroBtn } from '../../components/ui/PageHero'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Progress } from '../../components/ui/Progress'
@@ -41,6 +42,12 @@ const EMPTY_FORM = {
 
 export default function Training() {
   const { participants, payments } = useAppStore()
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
   const [programs, setPrograms] = useState<TrainingProgram[]>([])
   const [promotions, setPromotions] = useState<Promotion[]>([])
   const [loadingData, setLoadingData] = useState(true)
@@ -166,19 +173,24 @@ export default function Training() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Formations</h2>
-          <p className="text-sm text-gray-500">{programs.length} programmes · {promotions.length} promotions</p>
-        </div>
-        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>Nouvelle promotion</Button>
-      </div>
+      <PageHero
+        emoji="🏫"
+        title="Formations"
+        sub={`${programs.length} programmes · ${promotions.length} promotions`}
+        gradient="linear-gradient(135deg, #1e1060 0%, #6C5CE7 60%, #a78bfa 100%)"
+        actions={<HeroBtn onClick={() => setShowModal(true)}>+ Nouvelle promotion</HeroBtn>}
+        stats={[
+          { label: 'Actives', value: promotions.filter(p => p.status === 'active').length },
+          { label: 'À venir', value: promotions.filter(p => p.status === 'upcoming').length },
+          { label: 'Terminées', value: promotions.filter(p => p.status === 'completed').length },
+        ]}
+      />
 
       {/* Programs */}
       {programs.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 uppercase tracking-wide">Programmes</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 16 }}>
             {programs.map(prog => (
               <Card key={prog.id} hover>
                 <div className="flex items-start gap-3 mb-3">
@@ -204,7 +216,7 @@ export default function Training() {
       {/* Promotions */}
       <div>
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 uppercase tracking-wide">Promotions</h3>
-        <div className="flex gap-3 flex-wrap items-center mb-4">
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2, flexWrap: isMobile ? 'nowrap' : 'wrap', alignItems: 'center', marginBottom: 16 }}>
           <div className="flex-1 min-w-48">
             <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher…" icon={<Search className="w-4 h-4" />} />
           </div>

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { Plus, Search, ShoppingCart, CheckCircle, Package, FileText, XCircle, Trash2, Edit2, Save, Upload, ExternalLink } from 'lucide-react'
+import { PageHero, HeroBtn } from '../../components/ui/PageHero'
 import DateRangeFilter, { type Preset, type DateRange, getRange, inRange } from '../../components/ui/DateRangeFilter'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
@@ -315,16 +316,18 @@ export default function Purchases() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Achats & Dépenses</h2>
-          <p className="text-sm text-gray-500 mt-0.5">{purchases.length} achat{purchases.length > 1 ? 's' : ''} au total</p>
-        </div>
-        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setShowAdd(true)}>
-          Nouvel achat
-        </Button>
-      </div>
+      <PageHero
+        emoji="🛒"
+        title="Achats & Dépenses"
+        sub={`${purchases.length} achats · ${stats.missingInvoices} factures manquantes`}
+        gradient="linear-gradient(135deg, #1c1917 0%, #92400e 60%, #d97706 100%)"
+        actions={<HeroBtn onClick={() => setShowAdd(true)}><Plus className="w-3.5 h-3.5" /> Nouvel achat</HeroBtn>}
+        stats={[
+          { label: "En cours", value: stats.inProgress },
+          { label: 'Ce mois', value: stats.thisMonth },
+          { label: 'Dépensé', value: `${stats.spent.toLocaleString('fr-MA')} MAD` },
+        ]}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">

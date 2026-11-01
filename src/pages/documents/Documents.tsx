@@ -3,7 +3,8 @@ import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
-import { useState, useEffect, useRef } from 'react'
+import { PageHero, HeroBtn } from '../../components/ui/PageHero'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAppStore } from '../../store/appStore'
 import toast from 'react-hot-toast'
@@ -48,6 +49,12 @@ const TYPE_LABELS: Record<string, string> = {
 
 export default function Documents() {
   const { participants } = useAppStore()
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
   const [docs, setDocs] = useState<DocEntry[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
@@ -117,34 +124,37 @@ export default function Documents() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Documents</h2>
-          <p className="text-sm text-gray-500">{docs.length} fichiers</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <select
-            value={selectedPart}
-            onChange={e => setSelectedPart(e.target.value)}
-            className="text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">— Participant —</option>
-            {participants.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>)}
-          </select>
-          <Button variant="primary" icon={<Upload className="w-4 h-4" />}
-            onClick={() => { if (!selectedPart) { toast.error('Sélectionnez un participant'); return }; fileRef.current?.click() }}
-            disabled={uploading}>
-            {uploading ? 'Envoi…' : 'Téléverser'}
-          </Button>
-          <Button variant="ghost" size="icon" onClick={fetchDocs} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-          <input ref={fileRef} type="file" multiple className="hidden" onChange={handleUpload} />
-        </div>
-      </div>
+      <input ref={fileRef} type="file" multiple className="hidden" onChange={handleUpload} />
+      <PageHero
+        emoji="📁"
+        title="Documents"
+        sub={`${docs.length} fichiers · ${participants.length} participants`}
+        gradient="linear-gradient(135deg, #0c4a6e 0%, #0284c7 60%, #38bdf8 100%)"
+        actions={
+          <>
+            <select value={selectedPart} onChange={e => setSelectedPart(e.target.value)}
+              style={{ fontSize: 13, fontWeight: 600, border: '1.5px solid rgba(255,255,255,0.3)', borderRadius: 10, padding: '8px 12px', background: 'rgba(255,255,255,0.15)', color: '#fff', outline: 'none' }}>
+              <option value="" style={{ color: '#0A1628' }}>— Participant —</option>
+              {participants.map(p => <option key={p.id} value={p.id} style={{ color: '#0A1628' }}>{p.firstName} {p.lastName}</option>)}
+            </select>
+            <HeroBtn onClick={() => { if (!selectedPart) { toast.error('Sélectionnez un participant'); return }; fileRef.current?.click() }} disabled={uploading}>
+              <Upload className="w-3.5 h-3.5" /> {uploading ? 'Envoi…' : 'Téléverser'}
+            </HeroBtn>
+            <HeroBtn onClick={fetchDocs} disabled={loading}>
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </HeroBtn>
+          </>
+        }
+        stats={[
+          { label: 'Contrats', value: docs.filter(d => d.type === 'contract').length },
+          { label: 'Factures', value: docs.filter(d => d.type === 'invoice').length },
+          { label: 'Certificats', value: docs.filter(d => d.type === 'certificate').length },
+          { label: 'PDFs', value: docs.filter(d => d.type === 'pdf').length },
+        ]}
+      />
 
       {/* Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(5, 1fr)', gap: isMobile ? 8 : 12 }}>
         {['contract', 'invoice', 'certificate', 'pdf', 'image'].map(type => {
           const count = docs.filter(d => d.type === type).length
           return (
@@ -162,7 +172,7 @@ export default function Documents() {
       {loading ? (
         <div className="text-center py-12 text-gray-400">Chargement…</div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
           {filtered.map(doc => {
             const Icon = TYPE_ICONS[doc.type] || File
             return (

@@ -2,66 +2,26 @@ import { useEffect, useState } from 'react'
 import { useOutletContext, Link, useNavigate } from 'react-router-dom'
 import { learnerApi } from '../../lib/learnerApi'
 import { type LearnerSession } from '../../lib/learnerSession'
-import { Megaphone, Calendar, PlayCircle, FileText, FlaskConical, Award, Lightbulb, Sparkles, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 interface Announcement { id: string; content: string; created_at: string }
 interface ScheduleItem { id: string; title: string; seance_date: string; seance_time: string; location_or_link: string }
 interface RecentDoc { id: string; title: string; level: string; created_at: string }
 
-const QUOTES = [
-  { text: "Le coaching, c'est l'art d'aider quelqu'un à réaliser ce qu'il est capable de faire.", author: "John Whitmore" },
-  { text: "Ce n'est pas ce qui vous arrive qui compte, mais comment vous réagissez à ce qui vous arrive.", author: "Épictète" },
-  { text: "Le seul moyen de faire du bon travail est d'aimer ce que vous faites.", author: "Steve Jobs" },
-  { text: "La connaissance s'acquiert par l'expérience, tout le reste n'est qu'information.", author: "Albert Einstein" },
-  { text: "Chaque expert a un jour été un débutant.", author: "Helen Hayes" },
-  { text: "Le succès, c'est aller d'échec en échec sans perdre son enthousiasme.", author: "Winston Churchill" },
-  { text: "Ce que nous pensons, nous le devenons.", author: "Bouddha" },
-  { text: "Le plus grand secret du bonheur, c'est d'être bien avec soi-même.", author: "Bernard de Fontenelle" },
-  { text: "Les questions puissantes créent un espace dans lequel de nouvelles idées peuvent émerger.", author: "Marcia Reynolds" },
-  { text: "Un coach vous aide à voir ce que vous ne voyez pas encore en vous.", author: "Anonymous" },
-  { text: "Le changement commence au moment où vous décidez que votre vie peut être différente.", author: "Brian Tracy" },
-  { text: "La conscience de soi est le début de toute transformation.", author: "Anonymous" },
-  { text: "Vos croyances deviennent vos pensées, vos pensées deviennent vos actions.", author: "Gandhi" },
-  { text: "Le voyage de mille kilomètres commence toujours par un premier pas.", author: "Lao-Tseu" },
-  { text: "L'intelligence émotionnelle est la capacité à percevoir ses propres émotions et celles des autres.", author: "Daniel Goleman" },
-  { text: "Ce n'est pas la montagne que nous conquérons, mais nous-mêmes.", author: "Edmund Hillary" },
-  { text: "Chaque jour est une nouvelle opportunité de choisir qui vous voulez être.", author: "Anonymous" },
-  { text: "La résilience, c'est la capacité à rebondir après les épreuves.", author: "Boris Cyrulnik" },
-  { text: "Un objectif sans plan n'est qu'un souhait.", author: "Antoine de Saint-Exupéry" },
-  { text: "La plus grande découverte de tous les temps est qu'un être humain peut changer son avenir en changeant son attitude.", author: "William James" },
+const MESSAGES_JOUR = [
+  { text: "Chaque séance est une opportunité de découvrir une nouvelle dimension de vous-même.", author: "Sofya, Coach de vie" },
+  { text: "Le coaching n'est pas une destination — c'est une façon d'être avec soi-même et avec les autres.", author: "Sofya, Coach de vie" },
+  { text: "Vos clients futurs ont besoin exactement de ce que vous êtes en train d'apprendre aujourd'hui.", author: "Sofya, Coach de vie" },
+  { text: "L'authenticité est votre plus grand outil de coach. Plus vous vous connaissez, plus vous êtes puissante.", author: "Sofya, Coach de vie" },
+  { text: "Un coach ne donne pas les réponses — il pose les questions qui permettent à l'autre de les trouver.", author: "Sofya, Coach de vie" },
+  { text: "La présence totale est le don le plus précieux que vous offrirez à vos clients.", author: "Sofya, Coach de vie" },
+  { text: "Chaque concept que vous apprenez aujourd'hui changera une vie demain. La vôtre, et celle de vos clients.", author: "Sofya, Coach de vie" },
 ]
 
-const TIPS = [
-  { title: "La question puissante", body: "Préférez « Comment ? » à « Pourquoi ? » — elle ouvre des possibilités au lieu de chercher des justifications." },
-  { title: "L'écoute active", body: "Reformulez ce que dit votre client avant de répondre. Il se sentira vraiment entendu." },
-  { title: "Le silence en coaching", body: "Le silence de 3 à 5 secondes après une question crée l'espace nécessaire à la réflexion profonde." },
-  { title: "L'ancrage positif", body: "Associez un geste ou un mot à un état émotionnel positif pour pouvoir le rappeler à la demande." },
-  { title: "La roue de la vie", body: "Outil clé pour évaluer l'équilibre global d'un client sur 8 domaines de vie en une seule session." },
-  { title: "Le reframing", body: "Recadrer une situation négative sous un angle positif libère souvent de nouvelles ressources chez le client." },
-  { title: "Les croyances limitantes", body: "Repérez les formules « je ne peux pas », « c'est impossible », « je ne suis pas... » — ce sont des portes d'entrée." },
-  { title: "L'objectif SMART", body: "Spécifique, Mesurable, Atteignable, Réaliste, Temporel — la base de tout accompagnement structuré." },
-  { title: "La respiration 4-2-6", body: "Inspirez 4 secondes, retenez 2, expirez 6. Active le système parasympathique en 3 cycles." },
-  { title: "Le rapport de coaching", body: "Documentez chaque séance : objectif, insights du client, engagements pris et prochaine étape." },
-  { title: "La visualisation guidée", body: "Faites imaginer l'état désiré avec tous les sens — ce que le client voit, entend, ressent dans sa vie idéale." },
-  { title: "Le triangle dramatique", body: "Victim, Persécuteur, Sauveur — identifier le rôle joué par le client est souvent un tournant dans l'accompagnement." },
-  { title: "La congruence", body: "Un coach efficace aligne ses mots, sa voix et son langage corporel. La congruence crée la confiance." },
-  { title: "Le contrat de coaching", body: "Définissez dès le départ le périmètre, les règles de confidentialité et les critères de succès de l'accompagnement." },
-  { title: "L'auto-sabotage", body: "Repérez les comportements répétitifs qui empêchent le client d'avancer — souvent liés à une croyance profonde." },
-]
-
-function RingProgress({ pct, color, size = 64, stroke = 6 }: { pct: number; color: string; size?: number; stroke?: number }) {
-  const r = (size - stroke * 2) / 2
-  const circ = 2 * Math.PI * r
-  const dash = (pct / 100) * circ
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth={stroke} className="text-gray-100" />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
-        strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" style={{ transition: 'stroke-dasharray 0.6s ease' }} />
-    </svg>
-  )
-}
+const PURPLE = '#6C5CE7'
+const PURPLE_LIGHT = '#F0EEFF'
+const DARK = '#1E1B4B'
+const MUTED = '#8B8AAA'
 
 export default function EspaceAccueil() {
   const session = useOutletContext<LearnerSession>()
@@ -122,279 +82,210 @@ export default function EspaceAccueil() {
   }
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center py-24 gap-3">
-      <div className="w-10 h-10 rounded-full border-4 border-[#1D3462]/20 border-t-[#1D3462] animate-spin" />
-      <p className="text-sm text-gray-400">Chargement…</p>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 80, paddingBottom: 80, background: '#F5F4FF', minHeight: '100vh' }}>
+      <div style={{ width: 36, height: 36, borderRadius: '50%', border: `3px solid ${PURPLE_LIGHT}`, borderTopColor: PURPLE, animation: 'spin 0.8s linear infinite' }} />
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir'
-  const greetingEmoji = hour < 12 ? '🌤️' : hour < 18 ? '☀️' : '🌙'
-
   const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000)
-  const quote = QUOTES[dayOfYear % QUOTES.length]
-  const tip = TIPS[dayOfYear % TIPS.length]
-
-  const levelLabel = (session.allLevels?.length > 1 ? session.allLevels : [session.formationLevel])
-    .map(l => l === 'N1' ? 'N1 — Coach de vie' : l === 'N2' ? 'N2 — Master Coach Thérapeute' : 'N3 — Master Coach Consultant')
-    .join(' · ')
-
-  const totalTests = stats.testUnlocks || 1
-  const testPct = Math.min(100, Math.round((stats.testsDone / totalTests) * 100))
-  const recPct = stats.recordings > 0 ? 100 : 0
-  const docPct = stats.docs > 0 ? 100 : 0
-
+  const msgJour = MESSAGES_JOUR[dayOfYear % MESSAGES_JOUR.length]
+  const firstName = session.participantName.trim().split(' ')[0]
   const initials = session.participantName.trim().split(' ').slice(0, 2).map((w: string) => w[0]).join('').toUpperCase()
+  const totalTests = stats.testUnlocks || 1
+
+  const quickLinks = [
+    { label: 'Séances vidéo', sub: `${stats.recordings} vidéo${stats.recordings !== 1 ? 's' : ''}`, emoji: '🎬', to: '/espace/enregistrements', color: '#6C5CE7', bg: '#F0EEFF' },
+    { label: 'Tests & Quiz', sub: `${stats.testsDone}/${totalTests} fait${stats.testsDone !== 1 ? 's' : ''}`, emoji: '🧪', to: '/espace/tests', color: '#0EA5E9', bg: '#E0F2FE' },
+    { label: 'Documents', sub: `${stats.docs} ressource${stats.docs !== 1 ? 's' : ''}`, emoji: '📚', to: '/espace/documents', color: '#10B981', bg: '#ECFDF5' },
+    { label: 'Certificats', sub: stats.certifs > 0 ? `${stats.certifs} obtenu${stats.certifs !== 1 ? 's' : ''}` : 'En cours…', emoji: '🏆', to: '/espace/certificat', color: '#F59E0B', bg: '#FEF3C7' },
+  ]
+
+  const S: Record<string, React.CSSProperties> = {
+    page: { background: '#F5F4FF', minHeight: '100vh', marginLeft: -16, marginRight: -16, paddingBottom: 32 },
+    /* TOP BAR */
+    topBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px 10px' },
+    greeting: { fontSize: 12, color: MUTED, fontWeight: 500 },
+    name: { fontSize: 17, fontWeight: 800, color: DARK },
+    avatar: { width: 38, height: 38, borderRadius: 11, background: `linear-gradient(135deg,${PURPLE},#A78BFA)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#fff' },
+    /* HERO */
+    hero: { background: `linear-gradient(135deg,${PURPLE} 0%,#8B5CF6 55%,#A78BFA 100%)`, margin: '0 16px', borderRadius: 20, padding: '20px 20px 22px', position: 'relative', overflow: 'hidden' },
+    heroDeco1: { position: 'absolute', top: -40, right: -40, width: 160, height: 160, borderRadius: '50%', background: 'rgba(255,255,255,0.08)' },
+    heroDeco2: { position: 'absolute', bottom: -30, right: 60, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' },
+    heroLabel: { fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 500, marginBottom: 4 },
+    heroTitle: { fontSize: 22, fontWeight: 800, color: '#fff', lineHeight: 1.1, marginBottom: 4 },
+    heroSub: { fontSize: 11, color: 'rgba(255,255,255,0.55)', marginBottom: 16 },
+    heroCta: { display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', color: PURPLE, padding: '8px 16px', borderRadius: 50, fontSize: 12, fontWeight: 700, textDecoration: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: 'none', cursor: 'pointer' },
+    /* STATS */
+    statsRow: { display: 'flex', gap: 8, padding: '12px 16px' },
+    statCard: { flex: 1, background: '#fff', borderRadius: 13, padding: '10px 8px', textAlign: 'center', boxShadow: '0 2px 8px rgba(108,92,231,0.08)' },
+    statN: { fontSize: 20, fontWeight: 800, color: PURPLE, lineHeight: 1 },
+    statL: { fontSize: 9, color: MUTED, fontWeight: 500, marginTop: 3 },
+    /* SECTION HEAD */
+    secHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px', marginBottom: 10, marginTop: 16 },
+    secTitle: { fontSize: 14, fontWeight: 700, color: DARK },
+    secLink: { fontSize: 11, fontWeight: 600, color: PURPLE },
+    /* MSG */
+    msgCard: { margin: '0 16px', background: `linear-gradient(135deg,${DARK},#312E81)`, borderRadius: 16, padding: '16px 18px', position: 'relative', overflow: 'hidden' },
+    msgLabel: { fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 8 },
+    msgText: { fontSize: 13, fontWeight: 500, color: '#fff', lineHeight: 1.6, fontStyle: 'italic' as const },
+    msgAuthor: { fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 10 },
+    /* QUIZ */
+    quizCard: { margin: '0 16px', background: 'linear-gradient(135deg,#FFF7ED,#FEF3C7)', border: '1.5px solid #FDE68A', borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 },
+    quizBtn: { background: '#F59E0B', borderRadius: 50, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: '#fff', border: 'none', cursor: 'pointer', flexShrink: 0 },
+    /* QUICK LINKS */
+    grid2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: '0 16px' },
+    qlCard: { borderRadius: 14, padding: '14px 12px', display: 'flex', flexDirection: 'column' as const, gap: 8, textDecoration: 'none' },
+    qlEmoji: { fontSize: 22 },
+    qlLabel: { fontSize: 12, fontWeight: 700, color: DARK },
+    qlSub: { fontSize: 10, fontWeight: 500 },
+    /* RECENT DOCS */
+    whiteCard: { margin: '0 16px', background: '#fff', borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 8px rgba(108,92,231,0.07)' },
+    docRow: { display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderBottom: '1px solid #F5F4FF', textDecoration: 'none' },
+    docIcon: { fontSize: 16, flexShrink: 0 },
+    docName: { flex: 1, fontSize: 12, fontWeight: 600, color: DARK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
+    docArrow: { fontSize: 14, color: '#C4C2DD', flexShrink: 0 },
+    /* SESSIONS */
+    seanceCard: { margin: '0 16px 8px', background: '#fff', borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 8px rgba(108,92,231,0.07)' },
+    seanceDate: { background: `linear-gradient(135deg,${PURPLE},#8B5CF6)`, borderRadius: 10, width: 42, height: 48, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    seanceD: { fontSize: 16, fontWeight: 800, color: '#fff', lineHeight: 1 },
+    seanceM: { fontSize: 8, fontWeight: 600, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' as const },
+    seanceTitle: { fontSize: 12, fontWeight: 700, color: DARK },
+    seanceTime: { fontSize: 10, color: MUTED, marginTop: 1 },
+    joinBtn: { background: PURPLE_LIGHT, borderRadius: 50, padding: '4px 11px', fontSize: 10, fontWeight: 700, color: PURPLE, textDecoration: 'none', flexShrink: 0, border: 'none' },
+    /* ANNONCES */
+    annoCard: { margin: '0 16px 8px', background: '#fff', borderRadius: 14, padding: '14px', boxShadow: '0 2px 8px rgba(108,92,231,0.07)' },
+    annoText: { fontSize: 13, color: '#374151', lineHeight: 1.55 },
+    annoDate: { fontSize: 10, color: '#D1D5DB', marginTop: 6 },
+  }
 
   return (
-    <div className="space-y-4 pb-4">
+    <div style={S.page}>
 
-      {/* ── Hero ── */}
-      <div className="relative rounded-3xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #0f2347 0%, #1D3462 50%, #2a4a8a 100%)' }}>
-        {/* Cercles décoratifs */}
-        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #7eb0ff, transparent)' }} />
-        <div className="absolute -bottom-8 -left-8 w-32 h-32 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #a78bfa, transparent)' }} />
-        <div className="absolute top-1/2 right-4 w-20 h-20 rounded-full opacity-5" style={{ background: 'radial-gradient(circle, #fff, transparent)' }} />
+      {/* TOP BAR */}
+      <div style={S.topBar}>
+        <div>
+          <div style={S.greeting}>{greeting}</div>
+          <div style={S.name}>{firstName}</div>
+        </div>
+        <div style={S.avatar}>{initials}</div>
+      </div>
 
-        <div className="relative px-5 pt-5 pb-4">
-          {/* Top row */}
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <p className="text-blue-300 text-xs font-medium flex items-center gap-1.5 mb-1">
-                <span>{greetingEmoji}</span> {greeting}
-              </p>
-              <h1 className="text-xl font-bold text-white leading-tight">{session.participantName}</h1>
-              <span className="inline-block mt-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.12)', color: '#93c5fd' }}>
-                {levelLabel}
-              </span>
-            </div>
-            {/* Avatar */}
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-sm flex-shrink-0 ml-3"
-              style={{ background: 'linear-gradient(135deg, #60a5fa, #a78bfa)', color: '#fff' }}>
-              {initials}
-            </div>
-          </div>
-
-          {/* Citation */}
-          <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.07)' }}>
-            <div className="text-3xl leading-none text-blue-300/40 font-serif mb-1">"</div>
-            <p className="text-white/80 text-xs leading-relaxed italic -mt-2">{quote.text}</p>
-            <p className="text-blue-300/60 text-xs mt-1.5">— {quote.author}</p>
-          </div>
+      {/* HERO */}
+      <div style={S.hero}>
+        <div style={S.heroDeco1} />
+        <div style={S.heroDeco2} />
+        <div style={{ position: 'relative' }}>
+          <div style={S.heroLabel}>Continue ton apprentissage</div>
+          <div style={S.heroTitle}>Success<br />Compass</div>
+          <div style={S.heroSub}>Formation Coach Certifié · {session.formationLevel || 'Niveau 1'}</div>
+          <button style={S.heroCta} onClick={() => navigate('/espace/enregistrements')}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="#6C5CE7"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+            Reprendre
+          </button>
         </div>
       </div>
 
-      {/* ── Quiz Final N1 ── */}
+      {/* STATS */}
+      <div style={S.statsRow}>
+        <div style={S.statCard}><div style={S.statN}>{stats.recordings}</div><div style={S.statL}>Séances</div></div>
+        <div style={S.statCard}><div style={S.statN}>{stats.docs}</div><div style={S.statL}>Docs</div></div>
+        <div style={S.statCard}><div style={S.statN}>{stats.testsDone}</div><div style={S.statL}>Tests</div></div>
+        <div style={S.statCard}><div style={{ ...S.statN, color: stats.certifs > 0 ? '#10B981' : PURPLE }}>{stats.certifs}</div><div style={S.statL}>Certif.</div></div>
+      </div>
+
+      {/* MESSAGE DU JOUR */}
+      <div style={{ ...S.secHead, marginTop: 8 }}><span style={S.secTitle}>Message du jour</span></div>
+      <div style={S.msgCard}>
+        <div style={{ position: 'absolute', top: -8, right: 14, fontSize: 90, fontWeight: 900, color: 'rgba(255,255,255,0.05)', lineHeight: 1, fontFamily: 'Georgia,serif', pointerEvents: 'none' }}>"</div>
+        <div style={S.msgLabel}>Inspiration · {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+        <div style={S.msgText}>{msgJour.text}</div>
+        <div style={S.msgAuthor}>— {msgJour.author}</div>
+      </div>
+
+      {/* QUIZ BANNER */}
       {quizUnlocked && !quizDone && (
-        <button onClick={() => navigate('/test/quiz-coach')}
-          className="w-full text-left rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all active:scale-[0.98]"
-          style={{ background: 'linear-gradient(135deg, #d97706, #f59e0b)' }}>
-          <div className="px-4 py-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center text-xl flex-shrink-0">📝</div>
-            <div className="flex-1 min-w-0">
-              <p className="text-amber-100 text-xs font-semibold uppercase tracking-wide">À compléter</p>
-              <p className="text-white font-bold text-sm mt-0.5">Quiz Final — Niveau 1</p>
-              <p className="text-amber-100/70 text-xs">40 questions · Coaching de Vie</p>
+        <>
+          <div style={{ ...S.secHead, marginTop: 16 }}><span style={S.secTitle}>À faire</span></div>
+          <div style={S.quizCard}>
+            <span style={{ fontSize: 24, flexShrink: 0 }}>⚡</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#92400E' }}>Quiz débloqué !</div>
+              <div style={{ fontSize: 10, color: '#B45309', marginTop: 1 }}>Quiz Final — Coach Certifié</div>
             </div>
-            <div className="bg-white/20 rounded-xl p-2 flex-shrink-0">
-              <ChevronRight className="w-5 h-5 text-white" />
-            </div>
+            <button style={S.quizBtn} onClick={() => navigate('/test/quiz-coach')}>Démarrer</button>
           </div>
-        </button>
+        </>
       )}
 
-      {quizUnlocked && quizDone && (
-        <button onClick={() => navigate('/espace/tests')}
-          className="w-full text-left rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-50 hover:from-emerald-100 px-4 py-3.5 flex items-center gap-3 transition-colors">
-          <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center text-lg">✅</div>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-emerald-800">Quiz Final N1 — Complété</p>
-            <p className="text-xs text-emerald-600 mt-0.5">Voir votre résultat →</p>
-          </div>
-        </button>
-      )}
-
-      {/* ── Progression en anneaux ── */}
-      <div className="bg-white rounded-3xl border border-gray-100 px-5 py-4 shadow-sm">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Ma progression</p>
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { label: 'Tests', done: stats.testsDone, total: totalTests, pct: testPct, color: '#8b5cf6' },
-            { label: 'Vidéos', done: stats.recordings, total: stats.recordings || 1, pct: recPct, color: '#3b82f6' },
-            { label: 'Documents', done: stats.docs, total: stats.docs || 1, pct: docPct, color: '#10b981' },
-          ].map(({ label, done, total, pct, color }) => (
-            <div key={label} className="flex flex-col items-center gap-1.5">
-              <div className="relative">
-                <RingProgress pct={pct} color={color} size={60} stroke={5} />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-xs font-bold text-gray-700">{done}<span className="text-gray-400 font-normal">/{total}</span></span>
-                </div>
-              </div>
-              <span className="text-xs text-gray-500 font-medium">{label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Accès rapide ── */}
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          {
-            label: 'Enregistrements', sub: `${stats.recordings} vidéo${stats.recordings !== 1 ? 's' : ''}`,
-            icon: PlayCircle, to: '/espace/enregistrements',
-            gradient: 'linear-gradient(135deg, #1e40af, #3b82f6)',
-            iconBg: 'rgba(255,255,255,0.15)',
-          },
-          {
-            label: 'Tests', sub: `${stats.testsDone} complété${stats.testsDone !== 1 ? 's' : ''}`,
-            icon: FlaskConical, to: '/espace/tests',
-            gradient: 'linear-gradient(135deg, #6d28d9, #8b5cf6)',
-            iconBg: 'rgba(255,255,255,0.15)',
-          },
-          {
-            label: 'Ressources', sub: `${stats.docs} document${stats.docs !== 1 ? 's' : ''}`,
-            icon: FileText, to: '/espace/documents',
-            gradient: 'linear-gradient(135deg, #065f46, #10b981)',
-            iconBg: 'rgba(255,255,255,0.15)',
-          },
-          {
-            label: 'Certificats', sub: `${stats.certifs} obtenu${stats.certifs !== 1 ? 's' : ''}`,
-            icon: Award, to: '/espace/certificat',
-            gradient: 'linear-gradient(135deg, #92400e, #f59e0b)',
-            iconBg: 'rgba(255,255,255,0.15)',
-          },
-        ].map(({ label, sub, icon: Icon, to, gradient, iconBg }) => (
-          <Link key={to} to={to}
-            className="rounded-2xl p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-all active:scale-[0.97]"
-            style={{ background: gradient }}>
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: iconBg }}>
-              <Icon className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-white">{label}</p>
-              <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>{sub}</p>
-            </div>
+      {/* MON PROGRAMME */}
+      <div style={S.secHead}><span style={S.secTitle}>Mon programme</span></div>
+      <div style={S.grid2}>
+        {quickLinks.map(({ label, sub, emoji, to, color, bg }) => (
+          <Link key={to} to={to} style={{ ...S.qlCard, background: bg, textDecoration: 'none', boxShadow: '0 2px 8px rgba(108,92,231,0.07)' }}>
+            <span style={S.qlEmoji}>{emoji}</span>
+            <div style={S.qlLabel}>{label}</div>
+            <div style={{ ...S.qlSub, color }}>{sub}</div>
           </Link>
         ))}
       </div>
 
-      {/* ── Nouvelles ressources ── */}
+      {/* ANNONCES */}
+      {announcements.length > 0 && (
+        <>
+          <div style={S.secHead}><span style={S.secTitle}>Annonces</span></div>
+          {announcements.map(a => (
+            <div key={a.id} style={S.annoCard}>
+              <div style={S.annoText}>{a.content}</div>
+              <div style={S.annoDate}>{new Date(a.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* NOUVELLES RESSOURCES */}
       {recentDocs.length > 0 && (
-        <div className="rounded-3xl border border-emerald-100 overflow-hidden bg-white shadow-sm">
-          <div className="flex items-center gap-2 px-5 py-3.5 bg-gradient-to-r from-emerald-50 to-green-50 border-b border-emerald-100">
-            <Sparkles className="w-4 h-4 text-emerald-600" />
-            <h2 className="font-semibold text-gray-900 text-sm">Nouvelles ressources</h2>
-            <span className="ml-auto text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold">
-              {recentDocs.length} nouveau{recentDocs.length > 1 ? 'x' : ''}
-            </span>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {recentDocs.map(doc => (
-              <Link key={doc.id} to="/espace/documents"
-                className="px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50 transition-colors">
-                <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
-                  <FileText className="w-4 h-4 text-emerald-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{doc.title}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {new Date(doc.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
-                  </p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+        <>
+          <div style={S.secHead}><span style={S.secTitle}>Nouvelles ressources</span><span style={S.secLink}>Voir tout</span></div>
+          <div style={S.whiteCard}>
+            {recentDocs.map((doc, i) => (
+              <Link key={doc.id} to="/espace/documents" style={{ ...S.docRow, borderBottom: i < recentDocs.length - 1 ? '1px solid #F5F4FF' : 'none' }}>
+                <span style={S.docIcon}>📄</span>
+                <span style={S.docName}>{doc.title}</span>
+                <span style={S.docArrow}>›</span>
               </Link>
             ))}
           </div>
-        </div>
+        </>
       )}
 
-      {/* ── Conseil du jour ── */}
-      <div className="rounded-3xl overflow-hidden shadow-sm" style={{ background: 'linear-gradient(135deg, #fffbeb, #fef3c7)' }}>
-        <div className="px-5 py-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-xl bg-amber-400/20 flex items-center justify-center">
-              <Lightbulb className="w-4 h-4 text-amber-600" />
-            </div>
-            <span className="text-sm font-bold text-amber-900">Conseil du jour</span>
-            <span className="ml-auto text-xs text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full font-medium">
-              {dayOfYear % TIPS.length + 1}/{TIPS.length}
-            </span>
-          </div>
-          <div className="rounded-2xl px-4 py-3 border border-amber-200/60" style={{ background: 'rgba(255,255,255,0.6)' }}>
-            <p className="text-sm font-bold text-amber-900 mb-1">{tip.title}</p>
-            <p className="text-sm text-amber-800/80 leading-relaxed">{tip.body}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Prochaines séances ── */}
+      {/* PROCHAINES SÉANCES */}
       {nextSessions.length > 0 && (
-        <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
-          <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-50">
-            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
-              <Calendar className="w-3.5 h-3.5 text-blue-600" />
-            </div>
-            <h2 className="font-semibold text-gray-900 text-sm">Prochaines séances</h2>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {nextSessions.map(s => {
-              const d = new Date(s.seance_date + 'T00:00:00')
-              return (
-                <div key={s.id} className="px-5 py-3.5 flex items-start gap-4">
-                  <div className="rounded-2xl overflow-hidden flex-shrink-0 text-center w-12" style={{ background: 'linear-gradient(135deg, #1D3462, #2a4a8a)' }}>
-                    <p className="text-white/60 text-[9px] font-bold uppercase tracking-wider py-1 border-b border-white/10">
-                      {d.toLocaleDateString('fr-FR', { month: 'short' })}
-                    </p>
-                    <p className="text-white text-lg font-bold py-1">{d.getDate()}</p>
-                  </div>
-                  <div className="flex-1 min-w-0 pt-0.5">
-                    <p className="font-semibold text-gray-900 text-sm">{s.title}</p>
-                    {s.seance_time && <p className="text-xs text-gray-400 mt-0.5">🕐 {s.seance_time}</p>}
-                    {s.location_or_link && (
-                      s.location_or_link.startsWith('http') ? (
-                        <a href={s.location_or_link} target="_blank" rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-xs text-blue-600 font-medium mt-1 hover:underline">
-                          Rejoindre <ChevronRight className="w-3 h-3" />
-                        </a>
-                      ) : (
-                        <p className="text-xs text-gray-400 mt-0.5">📍 {s.location_or_link}</p>
-                      )
-                    )}
-                  </div>
+        <>
+          <div style={S.secHead}><span style={S.secTitle}>Prochaines séances</span><span style={S.secLink}>Agenda</span></div>
+          {nextSessions.map(s => {
+            const d = new Date(s.seance_date + 'T00:00:00')
+            return (
+              <div key={s.id} style={S.seanceCard}>
+                <div style={S.seanceDate}>
+                  <div style={S.seanceD}>{d.getDate()}</div>
+                  <div style={S.seanceM}>{d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')}</div>
                 </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ── Annonces ── */}
-      {announcements.length > 0 && (
-        <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
-          <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-50">
-            <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
-              <Megaphone className="w-3.5 h-3.5 text-amber-500" />
-            </div>
-            <h2 className="font-semibold text-gray-900 text-sm">Annonces</h2>
-            <span className="ml-auto w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center">
-              {announcements.length}
-            </span>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {announcements.map(a => (
-              <div key={a.id} className="px-5 py-4 flex gap-3">
-                <div className="w-1.5 rounded-full bg-gradient-to-b from-amber-400 to-orange-400 flex-shrink-0 mt-1.5 self-stretch" style={{ minHeight: 16 }} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-700 leading-relaxed">{a.content}</p>
-                  <p className="text-xs text-gray-400 mt-1.5">
-                    {new Date(a.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
-                  </p>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={S.seanceTitle}>{s.title}</div>
+                  {s.seance_time && <div style={S.seanceTime}>{s.seance_time}</div>}
                 </div>
+                {s.location_or_link?.startsWith('http') ? (
+                  <a href={s.location_or_link} target="_blank" rel="noreferrer" style={S.joinBtn}>Rejoindre</a>
+                ) : (
+                  <span style={{ ...S.joinBtn, background: '#F5F4FF', color: MUTED }}>{s.location_or_link || 'Présentiel'}</span>
+                )}
               </div>
-            ))}
-          </div>
-        </div>
+            )
+          })}
+        </>
       )}
 
     </div>

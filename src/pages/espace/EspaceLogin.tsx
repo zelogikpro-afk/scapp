@@ -39,6 +39,8 @@ export default function EspaceLogin() {
       const redirect = searchParams.get('redirect')
       if (redirect) {
         navigate(redirect)
+      } else if (data.formationLevel === 'admin') {
+        navigate('/espace/admin')
       } else if (data.formationLevel === 'digital') {
         navigate('/digital/accueil')
       } else {

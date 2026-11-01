@@ -50,27 +50,24 @@ export default function TestIEPage() {
     if (totalAnswered < 20) return
     setSaving(true)
     const computed = calcScores()
-    try {
-      await supabase.from('test_results').insert({
-        participant_id: participantId,
-        first_name: info.firstName,
-        last_name: info.lastName,
-        email: info.email,
-        phone: info.phone,
-        test_type: 'ie',
-        profile_key: null,
-        dominant_profile: null,
-        profile_name: null,
-        scores: computed,
-        answers,
-      })
-    } catch (err) {
-      console.error('IE insert error:', err)
-    }
     setScores(computed)
     setSaving(false)
     setStep('result')
     window.scrollTo(0, 0)
+
+    supabase.from('test_results').insert({
+      participant_id: participantId,
+      first_name: info.firstName,
+      last_name: info.lastName,
+      email: info.email,
+      phone: info.phone,
+      test_type: 'ie',
+      profile_key: null,
+      dominant_profile: null,
+      profile_name: null,
+      scores: computed,
+      answers,
+    }).then(({ error }) => { if (error) console.error('IE insert error:', error) })
   }
 
   async function handleDownloadPDF() {

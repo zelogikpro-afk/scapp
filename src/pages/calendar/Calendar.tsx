@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/Button'
 import { Avatar } from '../../components/ui/Avatar'
 import { Modal } from '../../components/ui/Modal'
 import { Input } from '../../components/ui/Input'
+import { PageHero, HeroBtn } from '../../components/ui/PageHero'
 import { useAppStore } from '../../store/appStore'
 import { useAuthStore } from '../../store/authStore'
 import { formatDate } from '../../lib/utils'
@@ -241,42 +242,39 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center justify-between sm:justify-start gap-3">
-          <div className="flex items-center gap-1">
-            <button onClick={() => setCurrentMonth(m => subMonths(m, 1))} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 transition-colors">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <h2 className="text-base font-bold text-gray-900 dark:text-gray-100 min-w-32 text-center capitalize">
-              {format(currentMonth, 'MMMM yyyy', { locale: fr })}
-            </h2>
-            <button onClick={() => setCurrentMonth(m => addMonths(m, 1))} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 transition-colors">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-          <button onClick={() => setCurrentMonth(new Date())} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors whitespace-nowrap">
-            Aujourd'hui
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex-1 sm:flex-none">
-            {(['month', 'week', 'agenda'] as const).map(v => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={`flex-1 sm:flex-none px-3 py-1.5 text-xs font-medium transition-colors capitalize ${view === v ? 'bg-blue-600 text-white' : 'text-gray-500 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-              >
-                {v === 'month' ? 'Mois' : v === 'week' ? 'Sem.' : 'Agenda'}
+      <PageHero
+        emoji="📅"
+        title={`Calendrier · ${format(currentMonth, 'MMMM yyyy', { locale: fr })}`}
+        sub={`${upcomingApts.length} RDV à venir · ${allAppointments.length} au total`}
+        gradient="linear-gradient(135deg, #0A1628 0%, #1A73E8 60%, #60a5fa 100%)"
+        actions={
+          <>
+            <div style={{ display: 'flex', borderRadius: 10, border: '1.5px solid rgba(255,255,255,0.3)', overflow: 'hidden' }}>
+              <button onClick={() => setCurrentMonth(m => subMonths(m, 1))} style={{ padding: '7px 10px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', cursor: 'pointer' }}>
+                <ChevronLeft className="w-4 h-4" />
               </button>
-            ))}
-          </div>
-          <Button variant="primary" icon={<Plus className="w-4 h-4" />} size="sm" onClick={() => setShowModal(true)}>
-            <span className="hidden sm:inline">Ajouter</span>
-          </Button>
-        </div>
-      </div>
+              <button onClick={() => setCurrentMonth(new Date())} style={{ padding: '7px 12px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+                Auj.
+              </button>
+              <button onClick={() => setCurrentMonth(m => addMonths(m, 1))} style={{ padding: '7px 10px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', cursor: 'pointer' }}>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <div style={{ display: 'flex', borderRadius: 10, border: '1.5px solid rgba(255,255,255,0.3)', overflow: 'hidden' }}>
+              {(['month', 'week', 'agenda'] as const).map(v => (
+                <button key={v} onClick={() => setView(v)} style={{ padding: '7px 12px', background: view === v ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+                  {v === 'month' ? 'Mois' : v === 'week' ? 'Sem.' : 'Agenda'}
+                </button>
+              ))}
+            </div>
+            <HeroBtn onClick={() => setShowModal(true)}><Plus className="w-3.5 h-3.5" /> Ajouter</HeroBtn>
+          </>
+        }
+        stats={[
+          { label: 'À venir', value: upcomingApts.length },
+          { label: 'Ce mois', value: allAppointments.filter(a => a.date.startsWith(format(currentMonth, 'yyyy-MM'))).length },
+        ]}
+      />
 
       <div className="flex flex-col lg:flex-row gap-5">
         {/* Calendar */}

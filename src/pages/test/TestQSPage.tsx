@@ -12,6 +12,12 @@ type Step = 'intro' | 'info' | 'questions' | 'result'
 const NAVY  = '#1D3462'
 const TEAL  = '#3BAAB5'
 
+const ANSWER_COLORS: Record<number, { bg: string; light: string; text: string }> = {
+  3: { bg: '#16a34a', light: '#dcfce7', text: '#166534' },
+  2: { bg: '#d97706', light: '#fef9c3', text: '#854d0e' },
+  1: { bg: '#dc2626', light: '#fee2e2', text: '#991b1b' },
+}
+
 export default function TestQSPage() {
   const [step, setStep]       = useState<Step>('intro')
   const [firstName, setFirst] = useState('')
@@ -19,10 +25,13 @@ export default function TestQSPage() {
   const [email, setEmail]     = useState('')
   const [phone, setPhone]     = useState('')
   const [answers, setAnswers] = useState<Record<number, number>>({})
+  const [currentQ, setCurrentQ] = useState(0)
+  const [transitioning, setTransitioning] = useState(false)
   const [saving, setSaving]   = useState(false)
   const [downloading, setDL]  = useState(false)
   const [fromSession, setFromSession] = useState(false)
   const [participantId, setParticipantId] = useState<string | null>(null)
+  const reportRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     try {
@@ -38,49 +47,36 @@ export default function TestQSPage() {
       setFromSession(true)
     } catch { /* ignore */ }
   }, [])
-  const reportRef = useRef<HTMLDivElement>(null)
 
-  const answered    = Object.keys(answers).length
-  const total       = QS_QUESTIONS.length
-  const allAnswered = answered === total
-
-  function answer(qId: number, val: number) {
-    setAnswers(prev => ({ ...prev, [qId]: val }))
+  function selectAnswer(qId: number, val: number, isLast: boolean) {
+    if (transitioning) return
+    const newAnswers = { ...answers, [qId]: val }
+    setAnswers(newAnswers)
+    if (!isLast) {
+      setTransitioning(true)
+      setTimeout(() => {
+        setCurrentQ(q => q + 1)
+        setTransitioning(false)
+      }, 220)
+    } else {
+      submitDirect(newAnswers)
+    }
   }
 
-  // Group questions by pilier in order
-  const grouped = QS_PILIER_ORDER.map(pilier => ({
-    pilier,
-    info: getPilierInfo(pilier),
-    questions: QS_QUESTIONS.filter(q => q.pilier === pilier),
-  }))
-
-  async function submit() {
-    if (!allAnswered) return
+  async function submitDirect(finalAnswers: Record<number, number>) {
     setSaving(true)
-    const totalScore = getTotalScore(answers)
+    const totalScore = getTotalScore(finalAnswers)
     const globalLevel = getQSGlobalLevel(totalScore)
-
-    // Build scores per pilier
     const scores: Record<string, number> = {}
-    QS_PILIER_ORDER.forEach(p => {
-      scores[p] = getPilierScore(p, answers)
-    })
-
-    await supabase.from('test_results').insert({
-      test_type:        'qs',
-      participant_id:   participantId,
-      first_name:       firstName,
-      last_name:        lastName,
-      email:            email || null,
-      phone:            phone || null,
-      scores,
-      dominant_profile: globalLevel,
-      answers,
-    })
-
+    QS_PILIER_ORDER.forEach(p => { scores[p] = getPilierScore(p, finalAnswers) })
     setSaving(false)
     setStep('result')
+    supabase.from('test_results').insert({
+      test_type: 'qs', participant_id: participantId,
+      first_name: firstName, last_name: lastName,
+      email: email || null, phone: phone || null,
+      scores, dominant_profile: globalLevel, answers: finalAnswers,
+    }).then(({ error }) => { if (error) console.error('QS insert error:', error) })
   }
 
   async function downloadPDF() {
@@ -94,7 +90,6 @@ export default function TestQSPage() {
       const container = reportRef.current
       const pages = Array.from(container.children) as HTMLElement[]
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [PAGE_W, PAGE_H] })
-
       for (let i = 0; i < pages.length; i++) {
         const canvas = await html2canvas(pages[i], {
           scale: 2, useCORS: true, allowTaint: true,
@@ -104,9 +99,7 @@ export default function TestQSPage() {
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, PAGE_W, PAGE_H)
       }
       pdf.save(`TEST QS_${firstName} ${lastName.toUpperCase()}.pdf`)
-    } catch (err) {
-      console.error(err)
-    }
+    } catch (err) { console.error(err) }
     setDL(false)
   }
 
@@ -177,84 +170,86 @@ export default function TestQSPage() {
     </div>
   )
 
-  // ── QUESTIONS ─────────────────────────────────────────────────────────────
-  if (step === 'questions') return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
-      {/* Sticky header */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 10, background: NAVY, padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 12px rgba(0,0,0,0.15)' }}>
-        <div style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>Test Quotient de Succès</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 180, height: 6, background: 'rgba(255,255,255,0.2)', borderRadius: 3, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${(answered / total) * 100}%`, background: TEAL, borderRadius: 3, transition: 'width 0.3s' }} />
-          </div>
-          <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{answered}/{total}</span>
+  // ── QUESTIONS (une par une) ────────────────────────────────────────────────
+  if (step === 'questions') {
+    if (saving) return (
+      <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 48, height: 48, border: `4px solid ${TEAL}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 16px' }} />
+          <p style={{ color: NAVY, fontWeight: 700 }}>Calcul de vos résultats…</p>
         </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
       </div>
+    )
 
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 24px 120px' }}>
-        {/* Scale legend */}
-        <div style={{ background: '#fff', borderRadius: 14, padding: '16px 20px', marginBottom: 28, display: 'flex', gap: 8, alignItems: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-          <span style={{ fontSize: 12, color: '#888', marginRight: 8 }}>Échelle :</span>
-          {QS_ANSWERS.map(a => (
-            <span key={a.value} style={{ fontSize: 12, fontWeight: 600, padding: '4px 12px', borderRadius: 20, background: a.value === 3 ? '#dcfce7' : a.value === 2 ? '#fef9c3' : '#fee2e2', color: a.value === 3 ? '#166534' : a.value === 2 ? '#854d0e' : '#991b1b' }}>
-              {a.label}
-            </span>
-          ))}
-        </div>
+    const q = QS_QUESTIONS[currentQ]
+    const pilierInfo = getPilierInfo(q.pilier)
+    const isLast = currentQ === QS_QUESTIONS.length - 1
+    const selected = answers[q.id]
+    const pct = Math.round(((currentQ + (selected !== undefined ? 1 : 0)) / QS_QUESTIONS.length) * 100)
 
-        {/* Questions by pilier */}
-        {grouped.map(({ pilier, info, questions }) => (
-          <div key={pilier} style={{ background: '#fff', borderRadius: 16, padding: '24px 28px', marginBottom: 20, boxShadow: '0 1px 6px rgba(0,0,0,0.07)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-              <div style={{ width: 4, height: 24, background: TEAL, borderRadius: 2 }} />
-              <span style={{ fontWeight: 800, fontSize: 15, color: NAVY }}>{info.label}</span>
+    return (
+      <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', flexDirection: 'column', opacity: transitioning ? 0.4 : 1, transition: 'opacity 0.15s' }}>
+        {/* Progress header */}
+        <div style={{ background: NAVY, padding: '14px 20px', flexShrink: 0 }}>
+          <div style={{ maxWidth: 560, margin: '0 auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#fff', fontSize: 13, marginBottom: 8 }}>
+              <span style={{ opacity: 0.7, fontWeight: 600 }}>Quotient de Succès</span>
+              <span style={{ fontWeight: 700 }}>{currentQ + 1} / {QS_QUESTIONS.length}</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              {questions.map(q => (
-                <div key={q.id}>
-                  <div style={{ fontSize: 14, color: '#333', lineHeight: 1.6, marginBottom: 10 }}>
-                    <span style={{ fontWeight: 700, color: TEAL, marginRight: 6 }}>{q.id}.</span>
-                    {q.text}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {QS_ANSWERS.map(a => {
-                      const selected = answers[q.id] === a.value
-                      const bg = selected
-                        ? (a.value === 3 ? '#16a34a' : a.value === 2 ? '#d97706' : '#dc2626')
-                        : '#f8fafc'
-                      return (
-                        <button key={a.value} onClick={() => answer(q.id, a.value)} style={{
-                          flex: 1, padding: '9px 4px',
-                          background: bg, color: selected ? '#fff' : '#555',
-                          border: selected ? 'none' : '1.5px solid #e5e7eb',
-                          borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                          transition: 'all 0.15s',
-                        }}>
-                          {a.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              ))}
+            <div style={{ height: 5, background: 'rgba(255,255,255,0.2)', borderRadius: 3 }}>
+              <div style={{ height: '100%', width: `${pct}%`, background: TEAL, borderRadius: 3, transition: 'width 0.3s' }} />
             </div>
           </div>
-        ))}
-      </div>
+        </div>
 
-      {/* Submit button */}
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '16px 24px', background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)', borderTop: '1px solid #e5e7eb' }}>
-        <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-          <p style={{ fontSize: 13, fontWeight: 600, color: '#f59e0b', visibility: allAnswered ? 'hidden' : 'visible', margin: 0 }}>
-            {total - answered} question{total - answered > 1 ? 's' : ''} restante{total - answered > 1 ? 's' : ''}
-          </p>
-          <button onClick={submit} disabled={!allAnswered || saving} style={{ padding: '14px 48px', background: allAnswered ? NAVY : '#d1d5db', color: '#fff', borderRadius: 14, border: 'none', fontSize: 16, fontWeight: 700, cursor: allAnswered && !saving ? 'pointer' : 'not-allowed', opacity: saving ? 0.7 : 1 }}>
-            {saving ? 'Enregistrement…' : 'Voir mes résultats →'}
-          </button>
+        {/* Question card */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 20px' }}>
+          <div style={{ maxWidth: 560, width: '100%' }}>
+            {/* Pilier badge */}
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: TEAL + '22', borderRadius: 20, padding: '5px 14px', marginBottom: 20 }}>
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: TEAL }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: TEAL, letterSpacing: 0.5 }}>{pilierInfo.label}</span>
+            </div>
+
+            {/* Question text */}
+            <p style={{ fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.55, marginBottom: 32 }}>
+              {q.text}
+            </p>
+
+            {/* Answer buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {QS_ANSWERS.map(a => {
+                const c = ANSWER_COLORS[a.value]
+                const isSelected = selected === a.value
+                return (
+                  <button key={a.value} onClick={() => selectAnswer(q.id, a.value, isLast)}
+                    style={{
+                      padding: '16px 20px', borderRadius: 14, border: 'none',
+                      background: isSelected ? c.bg : c.light,
+                      color: isSelected ? '#fff' : c.text,
+                      fontSize: 16, fontWeight: 700, cursor: 'pointer',
+                      transition: 'background 0.15s, color 0.15s',
+                      textAlign: 'center',
+                    }}>
+                    {a.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Back button */}
+            {currentQ > 0 && (
+              <button onClick={() => { setCurrentQ(q => q - 1) }}
+                style={{ marginTop: 20, background: 'none', border: 'none', color: '#94a3b8', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+                ← Question précédente
+              </button>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   // ── RESULT ────────────────────────────────────────────────────────────────
   const totalScore  = getTotalScore(answers)
@@ -263,7 +258,6 @@ export default function TestQSPage() {
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '40px 24px 80px' }}>
-        {/* Header card */}
         <div style={{ background: NAVY, borderRadius: 20, padding: '32px 36px', marginBottom: 24, color: '#fff' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
             <img src="/logo.png" alt="SC" style={{ width: 56, height: 56, objectFit: 'contain' }} />
@@ -278,7 +272,6 @@ export default function TestQSPage() {
           </div>
         </div>
 
-        {/* All 13 piliers */}
         {!fromSession && <div style={{ background: '#fff', borderRadius: 16, padding: '24px 28px', marginBottom: 24, boxShadow: '0 1px 6px rgba(0,0,0,0.07)' }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginBottom: 20 }}>Vos 13 piliers de succès</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -309,7 +302,6 @@ export default function TestQSPage() {
           </div>
         </div>}
 
-        {/* Download */}
         <div style={{ textAlign: 'center' }}>
           <button onClick={downloadPDF} disabled={downloading} style={{
             padding: '14px 40px', background: TEAL, color: '#fff', borderRadius: 14,
@@ -321,7 +313,6 @@ export default function TestQSPage() {
         </div>
       </div>
 
-      {/* Hidden PDF template */}
       <div style={{ position: 'fixed', left: -9999, top: 0, zIndex: -1 }}>
         <QSReportTemplate ref={reportRef} firstName={firstName} lastName={lastName} answers={answers} />
       </div>

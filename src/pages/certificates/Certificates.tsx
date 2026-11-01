@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Award, Download, QrCode, Plus, CheckCircle } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Avatar } from '../../components/ui/Avatar'
 import { Modal } from '../../components/ui/Modal'
+import { PageHero, HeroBtn } from '../../components/ui/PageHero'
 import { supabase } from '../../lib/supabase'
 import { useAppStore } from '../../store/appStore'
 import { formatDate } from '../../lib/utils'
@@ -140,6 +141,12 @@ const INITIAL: Cert[] = []
 export default function Certificates() {
   const [certs, setCerts] = useState<Cert[]>(INITIAL)
   const [showGenerate, setShowGenerate] = useState(false)
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
 
   function handleGenerated(cert: Cert) {
     setCerts(c => [cert, ...c])
@@ -155,18 +162,21 @@ export default function Certificates() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Certificats</h2>
-          <p className="text-sm text-gray-500">{issued.length} certificats délivrés</p>
-        </div>
-        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setShowGenerate(true)}>
-          Générer un certificat
-        </Button>
-      </div>
+      <PageHero
+        emoji="🏆"
+        title="Certificats"
+        sub={`${issued.length} délivrés · ${pending.length} en attente`}
+        gradient="linear-gradient(135deg, #78350f 0%, #d97706 60%, #fbbf24 100%)"
+        actions={<HeroBtn onClick={() => setShowGenerate(true)}><Plus className="w-3.5 h-3.5" /> Générer un certificat</HeroBtn>}
+        stats={[
+          { label: 'Délivrés', value: issued.length, color: '#fbbf24' },
+          { label: 'En attente', value: pending.length, color: '#fbbf24' },
+          { label: 'Total', value: certs.length, color: '#fbbf24' },
+        ]}
+      />
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: isMobile ? 8 : 16 }}>
         <Card className="text-center p-4">
           <p className="text-3xl font-bold text-emerald-600">{issued.length}</p>
           <p className="text-xs text-gray-500 mt-1">Délivrés</p>
@@ -192,7 +202,7 @@ export default function Certificates() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: 16 }}>
         {certs.map(cert => (
           <Card key={cert.id} hover className={cert.status === 'pending' ? 'opacity-70' : ''}>
             <CertificatePreview cert={cert} />

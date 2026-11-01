@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, ClipboardList, X, Trash2, Link, Copy, ExternalLink, Download, ChevronDown, ChevronUp, Eye, Mail, Phone, Calendar, Search, ArrowUpDown, RefreshCw, CheckCircle2, XCircle } from 'lucide-react'
+import { PageHero, HeroBtn } from '../../components/ui/PageHero'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -971,15 +972,18 @@ export default function Tests() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Tests</h2>
-          <p className="text-sm text-gray-500">{mappingResults.length} passation{mappingResults.length > 1 ? 's' : ''} du Test Mapping · {tests.length} tests psychométriques</p>
-        </div>
-        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setShowNew(true)}>
-          Nouveau test
-        </Button>
-      </div>
+      <PageHero
+        emoji="🧠"
+        title="Tests & Bilans"
+        sub={`${mappingResults.length} Mapping · ${ieResults.length} IE · ${qsResults.length} QS · ${compassResults.length} Compass`}
+        gradient="linear-gradient(135deg, #1e1b4b 0%, #4338ca 60%, #818cf8 100%)"
+        actions={<HeroBtn onClick={() => setShowNew(true)}><Plus className="w-3.5 h-3.5" /> Nouveau test</HeroBtn>}
+        stats={[
+          { label: 'Mapping', value: mappingResults.length },
+          { label: 'IE', value: ieResults.length },
+          { label: 'Valeurs', value: valeursResults.length },
+        ]}
+      />
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">

@@ -218,65 +218,69 @@ export default function ParticipantDetail({ participant: p, onClose }: { partici
     { id: 'journey', label: 'Parcours' },
   ] as const
 
+  const typeGradient: Record<string, string> = {
+    coaching: 'linear-gradient(135deg, #064e3b 0%, #059669 60%, #34d399 100%)',
+    training: 'linear-gradient(135deg, #4c1d95 0%, #7c3aed 60%, #a78bfa 100%)',
+    both:     'linear-gradient(135deg, #0A1628 0%, #1A73E8 60%, #60a5fa 100%)',
+  }
+
   return (
     <Modal open onClose={onClose} title="" size="xl">
       <div className="space-y-5">
-        {/* Header */}
-        <div className="flex items-start gap-4">
-          <Avatar name={`${p.firstName} ${p.lastName}`} size="xl" />
-          <div className="flex-1">
-            <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{p.firstName} {p.lastName}</h2>
-              {p.reference && <span className="text-xs font-mono bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md">{p.reference}</span>}
+        {/* Profile Hero */}
+        <div style={{ margin: '-24px -24px 0', borderRadius: '16px 16px 0 0', background: typeGradient[p.type] || typeGradient.both, padding: '24px 24px 20px', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.07)' }} />
+          <div style={{ position: 'absolute', bottom: -10, right: 60, width: 70, height: 70, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+            {/* Avatar */}
+            <div style={{ width: 60, height: 60, borderRadius: 20, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 20, color: '#fff', flexShrink: 0, border: '2px solid rgba(255,255,255,0.3)' }}>
+              {p.firstName.charAt(0)}{p.lastName.charAt(0)}
             </div>
-            <div className="flex flex-wrap items-center gap-2 mt-1.5">
-              <Badge variant={TYPE_CONFIG[p.type].color}>{TYPE_CONFIG[p.type].label}</Badge>
-              <Badge variant={p.isActive ? 'success' : 'danger'}>{p.isActive ? 'Actif' : 'Inactif'}</Badge>
-              {(p.tags || []).map(t => (
-                <span key={t} className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">{t}</span>
-              ))}
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                <Phone className="w-4 h-4 text-gray-400" />
-                <a href={`tel:${p.phone}`} className="hover:text-blue-600">{p.phone}</a>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <h2 style={{ fontSize: 20, fontWeight: 900, color: '#fff', margin: 0 }}>{p.firstName} {p.lastName}</h2>
+                {p.reference && <span style={{ fontSize: 11, fontFamily: 'monospace', background: 'rgba(255,255,255,0.2)', color: '#fff', padding: '2px 8px', borderRadius: 6 }}>{p.reference}</span>}
               </div>
-              {p.email && <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400"><Mail className="w-4 h-4 text-gray-400" /><a href={`mailto:${p.email}`} className="hover:text-blue-600">{p.email}</a></div>}
-              {p.profession && <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400"><Briefcase className="w-4 h-4 text-gray-400" /> {p.profession}</div>}
-            </div>
-          </div>
-          <div className="hidden sm:flex gap-3 items-start">
-            <div className="text-center bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-3 min-w-24">
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Payé</p>
-              <p className="text-base font-bold text-emerald-700 dark:text-emerald-300">{formatCurrency(totalPaid)}</p>
-            </div>
-            {totalOwed > 0 && (
-              <div className="text-center bg-amber-50 dark:bg-amber-900/20 rounded-xl p-3 min-w-24">
-                <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">Restant</p>
-                <p className="text-base font-bold text-amber-700 dark:text-amber-300">{formatCurrency(totalOwed)}</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                <span style={{ padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: 'rgba(255,255,255,0.2)', color: '#fff' }}>{TYPE_CONFIG[p.type].label}</span>
+                <span style={{ padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: p.isActive ? 'rgba(52,211,153,0.3)' : 'rgba(239,68,68,0.3)', color: '#fff' }}>{p.isActive ? 'Actif' : 'Inactif'}</span>
+                {(p.tags || []).map(t => <span key={t} style={{ padding: '3px 10px', borderRadius: 99, fontSize: 11, background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.9)' }}>{t}</span>)}
               </div>
-            )}
-            <button
-              onClick={async () => { if (!confirm(`Supprimer ${p.firstName} ${p.lastName} ?`)) return; await deleteParticipant(p.id); onClose() }}
-              className="p-2 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 transition-colors"
-              title="Supprimer le participant"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+              <div style={{ display: 'flex', gap: 12, marginTop: 10, flexWrap: 'wrap' }}>
+                {p.phone && <a href={`tel:${p.phone}`} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 12, fontWeight: 700, textDecoration: 'none', border: '1px solid rgba(255,255,255,0.2)' }}><Phone className="w-3 h-3" /> {p.phone}</a>}
+                {p.email && <a href={`mailto:${p.email}`} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 12, fontWeight: 700, textDecoration: 'none', border: '1px solid rgba(255,255,255,0.2)' }}><Mail className="w-3 h-3" /> Email</a>}
+              </div>
+            </div>
+            {/* Stats + Delete */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end', flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.15)', borderRadius: 14, padding: '8px 14px' }}>
+                  <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', margin: 0 }}>Payé</p>
+                  <p style={{ fontSize: 14, fontWeight: 800, color: '#fff', margin: '2px 0 0' }}>{formatCurrency(totalPaid)}</p>
+                </div>
+                {totalOwed > 0 && (
+                  <div style={{ textAlign: 'center', background: 'rgba(251,191,36,0.2)', borderRadius: 14, padding: '8px 14px' }}>
+                    <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', margin: 0 }}>Reste</p>
+                    <p style={{ fontSize: 14, fontWeight: 800, color: '#fbbf24', margin: '2px 0 0' }}>{formatCurrency(totalOwed)}</p>
+                  </div>
+                )}
+              </div>
+              <button onClick={async () => { if (!confirm(`Supprimer ${p.firstName} ${p.lastName} ?`)) return; await deleteParticipant(p.id); onClose() }}
+                style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(239,68,68,0.25)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.3)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-100 dark:border-gray-800">
-          <div className="flex gap-0.5 overflow-x-auto scrollbar-hide">
-            {tabs.map(t => (
-              <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'documents' && !docsLoaded) loadDocs(); if (t.id === 'tests' && !testsLoaded) loadTestResults(); if (t.id === 'certificats' && !diplomesLoaded) loadDiplomes() }}
-                className={`px-3 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors -mb-px ${tab === t.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+        <div style={{ borderBottom: '2px solid #F0F7FF', display: 'flex', gap: 0, overflowX: 'auto' }}>
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'documents' && !docsLoaded) loadDocs(); if (t.id === 'tests' && !testsLoaded) loadTestResults(); if (t.id === 'certificats' && !diplomesLoaded) loadDiplomes() }}
+              style={{ padding: '10px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: 'none', color: tab === t.id ? '#1A73E8' : '#6B88A8', borderBottom: tab === t.id ? '2px solid #1A73E8' : '2px solid transparent', marginBottom: -2, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
+              {t.label}
+            </button>
+          ))}
         </div>
 
         {/* Profile Tab */}

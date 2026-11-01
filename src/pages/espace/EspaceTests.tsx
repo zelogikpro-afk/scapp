@@ -534,19 +534,24 @@ export default function EspaceTests() {
     setLoading(false)
   }
 
-  if (loading) return <div className="text-center py-20 text-gray-400">Chargement…</div>
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 80 }}>
+      <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #F0EEFF', borderTopColor: '#6C5CE7', animation: 'spin 0.8s linear infinite' }} />
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  )
 
   const completedCount = TESTS.filter(t => results.some(r => r.test_type === t.type)).length
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Mes tests</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
+    <div className="space-y-5" style={{ paddingTop: 16 }}>
+      <div style={{ background: 'linear-gradient(135deg,#F59E0B,#FBBF24)', borderRadius: 20, padding: '20px' }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 2 }}>Tests & Quiz</div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)' }}>
           {completedCount > 0
             ? `${completedCount} test${completedCount > 1 ? 's' : ''} complété${completedCount > 1 ? 's' : ''}`
-            : 'Ces tests sont déverrouillés par votre formateur au moment opportun dans le programme.'}
-        </p>
+            : 'Déverrouillés par votre formateur au fil du programme'}
+        </div>
       </div>
 
       {/* Tests de profil */}

@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Plus, Video, Clock, CheckCircle, XCircle, Trash2, Pencil, Search } from 'lucide-react'
 import DateRangeFilter, { type Preset, type DateRange, getRange, inRange } from '../../components/ui/DateRangeFilter'
 import { Input } from '../../components/ui/Input'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
+import { PageHero, HeroBtn } from '../../components/ui/PageHero'
 import { Button } from '../../components/ui/Button'
 import { Avatar } from '../../components/ui/Avatar'
 import { Modal } from '../../components/ui/Modal'
@@ -29,6 +30,12 @@ const EMPTY = {
 export default function CoachingSessions() {
   const { coachingSessions, participants, coachingPacks, addCoachingSession, updateCoachingSession, deleteCoachingSession } = useAppStore()
   const { user } = useAuthStore()
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [participantFilter, setParticipantFilter] = useState<string>('all')
   const [packFilter, setPackFilter] = useState<string>('all')
@@ -89,16 +96,22 @@ export default function CoachingSessions() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Séances de Coaching</h2>
-          <p className="text-sm text-gray-500">{coachingSessions.length} séances au total</p>
-        </div>
-        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => { setEditId(null); setForm({ ...EMPTY }); setShowModal(true) }}>Nouvelle séance</Button>
-      </div>
+      <PageHero
+        emoji="🎯"
+        title="Séances de Coaching"
+        sub={`${coachingSessions.length} séances · ${coachingSessions.filter(s => s.status === 'scheduled').length} programmées`}
+        gradient="linear-gradient(135deg, #4c1d95 0%, #7c3aed 60%, #a78bfa 100%)"
+        actions={<HeroBtn onClick={() => { setEditId(null); setForm({ ...EMPTY }); setShowModal(true) }}>+ Nouvelle séance</HeroBtn>}
+        stats={[
+          { label: 'Complétées', value: coachingSessions.filter(s => s.status === 'completed').length },
+          { label: 'Programmées', value: coachingSessions.filter(s => s.status === 'scheduled').length },
+          { label: 'Annulées', value: coachingSessions.filter(s => s.status === 'cancelled' || s.status === 'missed').length },
+        ]}
+      />
 
-      <div className="flex gap-3 flex-wrap items-center">
-        <div className="flex-1 min-w-48">
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ minWidth: 180, flex: 1 }}>
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un participant…" icon={<Search className="w-4 h-4" />} />
         </div>
         <DateRangeFilter value={preset} onChange={handleDateChange} />
@@ -114,75 +127,90 @@ export default function CoachingSessions() {
         </select>
       </div>
 
-      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-        <button onClick={() => setStatusFilter('all')}
-          className={`p-3 rounded-xl border text-center transition-all ${statusFilter === 'all' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 ring-2 ring-blue-500 ring-offset-1' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800'}`}>
-          <div className="text-lg font-bold text-gray-900 dark:text-gray-100">{coachingSessions.length}</div>
-          <div className="text-xs text-gray-500">Toutes</div>
-        </button>
-        {Object.keys(STATUS_CONFIG).map(status => {
-          const count = coachingSessions.filter(s => s.status === status).length
-          const config = STATUS_CONFIG[status]
+      {/* Status pills */}
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+        {[
+          { key: 'all', label: 'Toutes', count: coachingSessions.length, bg: '#EFF6FF', color: '#1A73E8' },
+          { key: 'scheduled', label: 'Programmées', count: coachingSessions.filter(s => s.status === 'scheduled').length, bg: '#EFF6FF', color: '#1A73E8' },
+          { key: 'completed', label: 'Complétées', count: coachingSessions.filter(s => s.status === 'completed').length, bg: '#F0FDF4', color: '#16A34A' },
+          { key: 'cancelled', label: 'Annulées', count: coachingSessions.filter(s => s.status === 'cancelled').length, bg: '#FEF2F2', color: '#DC2626' },
+          { key: 'missed', label: 'Absent', count: coachingSessions.filter(s => s.status === 'missed').length, bg: '#FFF7ED', color: '#EA580C' },
+        ].map(item => {
+          const isActive = statusFilter === item.key
           return (
-            <button key={status} onClick={() => setStatusFilter(status)}
-              className={`p-3 rounded-xl border text-center transition-all ${statusFilter === status ? 'ring-2 ring-blue-500 ring-offset-1 border-blue-200 bg-blue-50 dark:bg-blue-900/20' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800'}`}>
-              <div className="text-lg font-bold text-gray-900 dark:text-gray-100">{count}</div>
-              <Badge variant={config.color} className="mt-0.5 text-xs">{config.label}</Badge>
+            <button key={item.key} onClick={() => setStatusFilter(item.key)}
+              style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 99, border: isActive ? 'none' : `1.5px solid ${item.bg}`, background: isActive ? item.color : item.bg, cursor: 'pointer', transition: 'all 0.15s' }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: isActive ? '#fff' : item.color }}>{item.count}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? 'rgba(255,255,255,0.85)' : item.color, whiteSpace: 'nowrap' }}>{item.label}</span>
             </button>
           )
         })}
       </div>
 
-      <div className="space-y-3">
-        {sorted.map(session => {
+      {/* Session list */}
+      <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #E2ECF8', boxShadow: '0 2px 12px rgba(26,115,232,0.06)', overflow: 'hidden' }}>
+        {sorted.map((session, i) => {
           const participant = participants.find(p => p.id === session.participantId)
           const pack = coachingPacks.find(cp => cp.id === session.packId)
           const config = STATUS_CONFIG[session.status] ?? STATUS_CONFIG.scheduled
           const Icon = config.icon
+          const STATUS_BADGE: Record<string, { bg: string; color: string }> = {
+            scheduled: { bg: '#EFF6FF', color: '#1A73E8' },
+            completed: { bg: '#F0FDF4', color: '#16A34A' },
+            cancelled: { bg: '#FEF2F2', color: '#DC2626' },
+            no_show:   { bg: '#FFF7ED', color: '#EA580C' },
+          }
+          const sb = STATUS_BADGE[session.status] || STATUS_BADGE.scheduled
+          const iconBg = session.status === 'completed' ? 'linear-gradient(135deg,#10b981,#34d399)' : session.status === 'scheduled' ? 'linear-gradient(135deg,#1A73E8,#4F94F0)' : 'linear-gradient(135deg,#94a3b8,#cbd5e1)'
           return (
-            <Card key={session.id} hover>
-              <div className="flex items-start gap-4">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                  session.status === 'completed' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' :
-                  session.status === 'scheduled' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' :
-                  'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}>
-                  <Icon className="w-5 h-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-3">
-                      {participant && <Avatar name={`${participant.firstName} ${participant.lastName}`} size="sm" />}
-                      <div>
-                        <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
-                          Séance #{session.sessionNumber} — {participant ? `${participant.firstName} ${participant.lastName}` : ''}
-                        </p>
-                        {pack && <p className="text-xs text-gray-400">{pack.name}</p>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Badge variant={config.color}>{config.label}</Badge>
-                      <button onClick={() => openEdit(session)} className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => handleDelete(session.id)} className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                    <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{formatDate(session.date)} à {session.time}</span>
-                    <span>{session.duration} min</span>
-                    {session.meetLink && (
-                      <a href={session.meetLink} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-blue-500 hover:underline">
-                        <Video className="w-3.5 h-3.5" /> Meet
-                      </a>
-                    )}
-                  </div>
-                  {session.summary && <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2 line-clamp-2">{session.summary}</p>}
-                  {session.homework && <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">📝 {session.homework}</p>}
-                </div>
+            <div key={session.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px 18px', borderBottom: i < sorted.length - 1 ? '1px solid #F0F7FF' : 'none' }}>
+              {/* Status icon */}
+              <div style={{ width: 42, height: 42, borderRadius: 14, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon className="w-5 h-5 text-white" />
               </div>
-            </Card>
+              {/* Content */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {participant && <Avatar name={`${participant.firstName} ${participant.lastName}`} size="sm" />}
+                    <div>
+                      <p style={{ fontWeight: 700, fontSize: 14, color: '#0A1628', margin: 0 }}>
+                        Séance #{session.sessionNumber} — {participant ? `${participant.firstName} ${participant.lastName}` : '—'}
+                      </p>
+                      {pack && <p style={{ fontSize: 11, color: '#6B88A8', margin: '2px 0 0' }}>{pack.name}</p>}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <span style={{ padding: '4px 12px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: sb.bg, color: sb.color }}>
+                      {config.label}
+                    </span>
+                    <button onClick={() => openEdit(session)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F0F7FF', color: '#1A73E8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => handleDelete(session.id)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#FEF2F2', color: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontSize: 12, color: '#6B88A8', flexWrap: 'wrap' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Clock className="w-3.5 h-3.5" />{formatDate(session.date)} à {session.time}
+                  </span>
+                  <span style={{ background: '#F0F7FF', color: '#1A73E8', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600 }}>{session.duration} min</span>
+                  {session.meetLink && (
+                    <a href={session.meetLink} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#1A73E8', fontWeight: 600, textDecoration: 'none', fontSize: 12 }}>
+                      <Video className="w-3.5 h-3.5" /> Meet
+                    </a>
+                  )}
+                </div>
+                {session.summary && <p style={{ marginTop: 8, fontSize: 12, color: '#6B88A8', background: '#F8FAFF', borderRadius: 8, padding: '8px 12px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{session.summary}</p>}
+                {session.homework && <p style={{ marginTop: 6, fontSize: 12, color: '#D97706' }}>📝 {session.homework}</p>}
+              </div>
+            </div>
           )
         })}
         {sorted.length === 0 && (
-          <Card className="text-center py-12"><p className="text-gray-400">Aucune séance trouvée</p></Card>
+          <div style={{ textAlign: 'center', padding: '64px 16px', color: '#94A3B8', fontSize: 14 }}>Aucune séance trouvée</div>
         )}
       </div>
 

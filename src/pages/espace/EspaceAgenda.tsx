@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { learnerApi } from '../../lib/learnerApi'
+import { supabaseAdmin } from '../../lib/supabase'
 import type { LearnerSession } from '../../lib/learnerSession'
-import { Calendar, Clock, Video, Star, ChevronDown, ChevronUp, MapPin } from 'lucide-react'
+import { Calendar, Clock, Video, Star, ChevronDown, ChevronUp, MapPin, User } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface ScheduleEntry {
@@ -18,11 +19,20 @@ interface ScheduleEntry {
   notes: string | null
 }
 interface Rating { id: string; schedule_id: string; rating: number; comment: string | null }
+interface CoachingEntry {
+  id: string
+  date: string
+  time: string
+  duration: number
+  notes: string
+  status: 'planned' | 'done' | 'cancelled'
+}
 
 export default function EspaceAgenda() {
   const session = useOutletContext<LearnerSession>()
   const [entries, setEntries] = useState<ScheduleEntry[]>([])
   const [ratings, setRatings] = useState<Rating[]>([])
+  const [coachingSessions, setCoachingSessions] = useState<CoachingEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [ratingModal, setRatingModal] = useState<ScheduleEntry | null>(null)
@@ -35,11 +45,25 @@ export default function EspaceAgenda() {
   async function load() {
     setLoading(true)
     const promotionIds = session.allPromotionIds?.length ? session.allPromotionIds : session.promotionId ? [session.promotionId] : []
-    if (!promotionIds.length) { setLoading(false); return }
 
-    const data = await learnerApi.getAgenda({ allPromotionIds: promotionIds }) as any
-    setEntries(data.sessions || [])
-    setRatings(data.ratings || [])
+    const promises: Promise<any>[] = [
+      promotionIds.length
+        ? learnerApi.getAgenda({ allPromotionIds: promotionIds })
+        : Promise.resolve({ sessions: [], ratings: [] }),
+    ]
+    const agendaData = await promises[0]
+    setEntries((agendaData as any).sessions || [])
+    setRatings((agendaData as any).ratings || [])
+
+    if (session.participantId) {
+      const { data: coachData } = await supabaseAdmin
+        .from('coaching_sessions_admin')
+        .select('id, date, time, duration, notes, status')
+        .eq('participant_id', session.participantId)
+        .neq('status', 'cancelled')
+        .order('date', { ascending: true })
+      setCoachingSessions((coachData || []) as CoachingEntry[])
+    }
     setLoading(false)
   }
 
@@ -66,6 +90,8 @@ export default function EspaceAgenda() {
   const now = new Date()
   const upcoming = entries.filter(e => new Date(e.date) >= now)
   const past = entries.filter(e => new Date(e.date) < now)
+  const upcomingCoaching = coachingSessions.filter(s => new Date(s.date) >= now)
+  const pastCoaching = coachingSessions.filter(s => new Date(s.date) < now && s.status === 'done')
 
   if (loading) return <div className="text-center py-20 text-gray-400">Chargement…</div>
 
@@ -124,14 +150,42 @@ export default function EspaceAgenda() {
     )
   }
 
+  function CoachingCard({ s, isPast }: { s: CoachingEntry; isPast: boolean }) {
+    const d = new Date(s.date)
+    const durationLabel = s.duration >= 60
+      ? `${Math.floor(s.duration / 60)}h${s.duration % 60 > 0 ? s.duration % 60 : ''}`
+      : `${s.duration}min`
+    return (
+      <div className={`bg-white rounded-2xl border overflow-hidden ${isPast ? 'border-gray-100 opacity-90' : 'border-purple-100 shadow-sm'}`}>
+        <div className="p-4 flex items-start gap-4">
+          <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center flex-shrink-0 text-white ${isPast ? 'bg-gray-400' : 'bg-purple-600'}`}>
+            <span className="text-xs font-medium leading-none">{d.toLocaleDateString('fr-FR', { month: 'short' }).toUpperCase()}</span>
+            <span className="text-lg font-bold leading-none">{d.getDate()}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <User className="w-3.5 h-3.5 text-purple-500" />
+              <span className="text-xs font-semibold text-purple-600 uppercase tracking-wide">Coaching individuel</span>
+            </div>
+            <p className="font-semibold text-gray-900 text-sm capitalize">{d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+              <Clock className="w-3 h-3" />{s.time} · {durationLabel}
+            </p>
+            {s.notes && <p className="text-sm text-gray-500 mt-1">{s.notes}</p>}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-gray-900">Mon agenda</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{entries.length} séance{entries.length > 1 ? 's' : ''} au total</p>
+        <p className="text-sm text-gray-500 mt-0.5">{entries.length + coachingSessions.length} séance{(entries.length + coachingSessions.length) > 1 ? 's' : ''} au total</p>
       </div>
 
-      {entries.length === 0 && (
+      {entries.length === 0 && coachingSessions.length === 0 && (
         <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
           <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 font-medium">Aucune séance planifiée</p>
@@ -139,17 +193,19 @@ export default function EspaceAgenda() {
         </div>
       )}
 
-      {upcoming.length > 0 && (
+      {(upcoming.length > 0 || upcomingCoaching.length > 0) && (
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">À venir</h2>
           {upcoming.map(e => <EntryCard key={e.id} e={e} isPast={false} />)}
+          {upcomingCoaching.map(s => <CoachingCard key={s.id} s={s} isPast={false} />)}
         </div>
       )}
 
-      {past.length > 0 && (
+      {(past.length > 0 || pastCoaching.length > 0) && (
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Passées</h2>
           {past.map(e => <EntryCard key={e.id} e={e} isPast={true} />)}
+          {pastCoaching.map(s => <CoachingCard key={s.id} s={s} isPast={true} />)}
         </div>
       )}
 

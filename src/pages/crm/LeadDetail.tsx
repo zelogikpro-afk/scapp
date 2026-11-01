@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Phone, MessageCircle, Mail, Send, Edit2, UserPlus, Save, X, Trash2 } from 'lucide-react'
+import { Phone, MessageCircle, Mail, Send, Save, X, Trash2, UserPlus, Clock, CheckCircle, AlertCircle } from 'lucide-react'
 import { Modal } from '../../components/ui/Modal'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -10,17 +10,47 @@ import { useAuthStore } from '../../store/authStore'
 import { formatDate, timeAgo } from '../../lib/utils'
 import type { Lead, LeadStatus } from '../../types'
 
-const STATUS_CONFIG: Record<LeadStatus, { label: string; color: any }> = {
-  new:             { label: 'Nouveau lead',        color: 'info' },
-  to_contact:      { label: 'À contacter',         color: 'info' },
-  contacted:       { label: 'Contacté',            color: 'warning' },
-  no_answer:       { label: 'Injoignable',         color: 'default' },
-  callback:        { label: 'En réflexion',        color: 'warning' },
-  interested:      { label: 'Intéressé',           color: 'success' },
-  appointment:     { label: 'RDV fixé',            color: 'purple' },
-  pending_payment: { label: 'Paiement en attente', color: 'warning' },
-  registered:      { label: 'Inscrit',             color: 'purple' },
-  not_interested:  { label: 'Refus',               color: 'danger' },
+const STATUS_CONFIG: Record<LeadStatus, { label: string; color: any; bg: string; text: string }> = {
+  new:             { label: 'Nouveau',          color: 'info',    bg: '#EFF6FF', text: '#1A73E8' },
+  to_contact:      { label: 'À contacter',      color: 'info',    bg: '#F0F9FF', text: '#0284C7' },
+  contacted:       { label: 'Contacté',         color: 'warning', bg: '#FFFBEB', text: '#D97706' },
+  no_answer:       { label: 'Injoignable',      color: 'default', bg: '#F8FAFC', text: '#64748B' },
+  callback:        { label: 'En réflexion',     color: 'warning', bg: '#FFF7ED', text: '#EA580C' },
+  interested:      { label: 'Intéressé',        color: 'success', bg: '#F0FDF4', text: '#16A34A' },
+  appointment:     { label: 'RDV fixé',         color: 'purple',  bg: '#F5F3FF', text: '#7C3AED' },
+  pending_payment: { label: 'Paiement att.',    color: 'warning', bg: '#FEFCE8', text: '#CA8A04' },
+  registered:      { label: 'Inscrit',          color: 'purple',  bg: '#FAF5FF', text: '#9333EA' },
+  not_interested:  { label: 'Refus',            color: 'danger',  bg: '#FEF2F2', text: '#DC2626' },
+}
+
+const STATUS_GRADIENT: Partial<Record<LeadStatus, string>> = {
+  new:             'linear-gradient(135deg, #0A1628 0%, #1A73E8 100%)',
+  to_contact:      'linear-gradient(135deg, #0A1628 0%, #0284C7 100%)',
+  contacted:       'linear-gradient(135deg, #0A1628 0%, #D97706 100%)',
+  interested:      'linear-gradient(135deg, #064e3b 0%, #059669 100%)',
+  appointment:     'linear-gradient(135deg, #4c1d95 0%, #7c3aed 100%)',
+  registered:      'linear-gradient(135deg, #4a044e 0%, #9333ea 100%)',
+  not_interested:  'linear-gradient(135deg, #450a0a 0%, #dc2626 100%)',
+  pending_payment: 'linear-gradient(135deg, #451a03 0%, #ca8a04 100%)',
+}
+
+function InfoField({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null
+  return (
+    <div style={{ padding: '10px 0', borderBottom: '1px solid #F0F7FF' }}>
+      <p style={{ fontSize: 11, color: '#6B88A8', fontWeight: 600, margin: 0, textTransform: 'uppercase', letterSpacing: 0.3 }}>{label}</p>
+      <p style={{ fontSize: 13, color: '#0A1628', fontWeight: 600, margin: '3px 0 0' }}>{value}</p>
+    </div>
+  )
+}
+
+function SectionTitle({ children }: { children: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '16px 0 4px' }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: '#6B88A8', textTransform: 'uppercase', letterSpacing: 0.5 }}>{children}</span>
+      <div style={{ flex: 1, height: 1, background: '#E2ECF8' }} />
+    </div>
+  )
 }
 
 export default function LeadDetail({ lead, onClose }: { lead: Lead; onClose: () => void }) {
@@ -31,17 +61,12 @@ export default function LeadDetail({ lead, onClose }: { lead: Lead; onClose: () 
   const { updateLead, deleteLead, addLeadNote, convertLeadToParticipant, profiles } = useAppStore()
   const { user } = useAuthStore()
 
-  // Edit form state
   const [editForm, setEditForm] = useState({
-    firstName: lead.firstName,
-    lastName: lead.lastName,
-    phone: lead.phone,
-    whatsapp: lead.whatsapp ?? '',
-    email: lead.email ?? '',
-    city: lead.city ?? '',
-    profession: lead.profession ?? '',
-    programInterest: lead.programInterest ?? '',
-    interestLevel: lead.interestLevel ?? '' as '' | 'low' | 'medium' | 'high',
+    firstName: lead.firstName, lastName: lead.lastName,
+    phone: lead.phone, whatsapp: lead.whatsapp ?? '',
+    email: lead.email ?? '', city: lead.city ?? '',
+    profession: lead.profession ?? '', programInterest: lead.programInterest ?? '',
+    interestLevel: (lead.interestLevel ?? '') as '' | 'low' | 'medium' | 'high',
     nextFollowUpDate: lead.nextFollowUpDate ?? '',
   })
   const [saving, setSaving] = useState(false)
@@ -56,25 +81,12 @@ export default function LeadDetail({ lead, onClose }: { lead: Lead; onClose: () 
     updateLead(lead.id, { status, lastTouchedBy: user?.name, lastTouchedAt: new Date().toISOString() })
   }
 
-  function handleAssign(profileId: string) {
-    const profile = profiles.find(p => p.id === profileId)
-    updateLead(lead.id, {
-      assignedTo: profileId || undefined,
-      assignedToName: profile?.name || undefined,
-      lastTouchedBy: user?.name,
-      lastTouchedAt: new Date().toISOString(),
-    })
-  }
-
   async function handleSaveEdit() {
     setSaving(true)
     await updateLead(lead.id, {
-      firstName: editForm.firstName,
-      lastName: editForm.lastName,
-      phone: editForm.phone,
-      whatsapp: editForm.whatsapp || undefined,
-      email: editForm.email || undefined,
-      nextFollowUpDate: editForm.nextFollowUpDate || undefined,
+      firstName: editForm.firstName, lastName: editForm.lastName,
+      phone: editForm.phone, whatsapp: editForm.whatsapp || undefined,
+      email: editForm.email || undefined, nextFollowUpDate: editForm.nextFollowUpDate || undefined,
     })
     setSaving(false)
     setActiveTab('info')
@@ -88,362 +100,325 @@ export default function LeadDetail({ lead, onClose }: { lead: Lead; onClose: () 
     setConvertDone(true)
   }
 
+  const sc = STATUS_CONFIG[lead.status]
+  const heroGradient = STATUS_GRADIENT[lead.status] || 'linear-gradient(135deg, #0A1628 0%, #1A73E8 100%)'
+
   const tabs = [
-    { id: 'info', label: 'Informations' },
-    { id: 'edit', label: 'Modifier' },
-    { id: 'notes', label: `Notes (${lead.notes.length})` },
-    { id: 'history', label: `Historique (${lead.followUps.length})` },
-  ] as const
+    { id: 'info' as const,    label: 'Infos' },
+    { id: 'edit' as const,    label: 'Modifier' },
+    { id: 'notes' as const,   label: `Notes${lead.notes.length > 0 ? ` (${lead.notes.length})` : ''}` },
+    { id: 'history' as const, label: `Suivi${lead.followUps.length > 0 ? ` (${lead.followUps.length})` : ''}` },
+  ]
 
   return (
     <Modal open onClose={onClose} title="" size="lg">
-      <div className="space-y-5">
-        {/* Header */}
-        <div className="flex items-start gap-4">
-          <Avatar name={`${lead.firstName} ${lead.lastName}`} size="lg" />
-          <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{lead.firstName} {lead.lastName}</h2>
-            <div className="flex items-center gap-3 mt-1 flex-wrap">
-              <Badge variant={STATUS_CONFIG[lead.status].color} dot>{STATUS_CONFIG[lead.status].label}</Badge>
-              <span className="text-xs text-gray-400">{lead.source}</span>
-              {lead.campaign && <span className="text-xs text-gray-400">· {lead.campaign}</span>}
+      {/* ── Profile Hero ── */}
+      <div style={{ margin: '-24px -24px 0', borderRadius: '16px 16px 0 0', overflow: 'hidden', background: heroGradient, padding: '24px 24px 20px', position: 'relative' }}>
+        {/* decorative circles */}
+        <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.07)' }} />
+        <div style={{ position: 'absolute', bottom: -10, right: 60, width: 70, height: 70, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+
+        <div style={{ position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+            {/* Avatar */}
+            <div style={{ width: 60, height: 60, borderRadius: 20, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800, color: '#fff', flexShrink: 0, border: '2px solid rgba(255,255,255,0.3)' }}>
+              {lead.firstName.charAt(0).toUpperCase()}{lead.lastName.charAt(0).toUpperCase()}
+            </div>
+            {/* Name + meta */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 900, color: '#fff', margin: 0, letterSpacing: '-0.3px' }}>
+                {lead.firstName} {lead.lastName}
+              </h2>
+              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', margin: '3px 0 0' }}>
+                {lead.source}{lead.campaign ? ` · ${lead.campaign}` : ''}
+                {lead.city ? ` · ${lead.city}` : ''}
+              </p>
+              {/* Status + date */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                <span style={{ padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: 'rgba(255,255,255,0.2)', color: '#fff' }}>
+                  {sc.label}
+                </span>
+                {lead.nextFollowUpDate && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'rgba(255,255,255,0.75)' }}>
+                    <Clock className="w-3 h-3" /> Rappel {formatDate(lead.nextFollowUpDate)}
+                  </span>
+                )}
+                {lead.createdAt && (
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
+                    Reçu {new Date(lead.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-          {/* Actions */}
-          <div className="flex gap-2 flex-wrap justify-end">
+
+          {/* Action buttons row */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
             {lead.phone && (
-              <a href={`tel:${lead.phone}`} className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 hover:bg-blue-100 transition-colors">
-                <Phone className="w-4 h-4" />
+              <a href={`tel:${lead.phone}`}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 12, background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 12, fontWeight: 700, textDecoration: 'none', border: '1px solid rgba(255,255,255,0.2)' }}>
+                <Phone className="w-3.5 h-3.5" /> Appeler
               </a>
             )}
             {lead.whatsapp && (
-              <a href={`https://wa.me/${lead.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center text-emerald-600 hover:bg-emerald-100 transition-colors">
-                <MessageCircle className="w-4 h-4" />
+              <a href={`https://wa.me/${lead.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 12, background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 12, fontWeight: 700, textDecoration: 'none', border: '1px solid rgba(255,255,255,0.2)' }}>
+                <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
               </a>
             )}
             {lead.email && (
-              <a href={`mailto:${lead.email}`} className="w-9 h-9 rounded-lg bg-gray-50 dark:bg-gray-800 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors">
-                <Mail className="w-4 h-4" />
+              <a href={`mailto:${lead.email}`}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 12, background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 12, fontWeight: 700, textDecoration: 'none', border: '1px solid rgba(255,255,255,0.2)' }}>
+                <Mail className="w-3.5 h-3.5" /> Email
               </a>
             )}
             {!convertDone && lead.status !== 'registered' && (
-              <Button variant="primary" size="sm" icon={<UserPlus className="w-3.5 h-3.5" />} onClick={handleConvert} disabled={converting}>
-                {converting ? 'En cours…' : 'Participant'}
-              </Button>
+              <button onClick={handleConvert} disabled={converting}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 12, background: '#fff', color: '#1A73E8', fontSize: 12, fontWeight: 700, border: 'none', cursor: converting ? 'not-allowed' : 'pointer' }}>
+                <UserPlus className="w-3.5 h-3.5" /> {converting ? 'En cours…' : '→ Participant'}
+              </button>
             )}
-            {convertDone && <Badge variant="success" dot>Converti !</Badge>}
-            <button
-              onClick={async () => { if (!confirm(`Supprimer le lead ${lead.firstName} ${lead.lastName} ?`)) return; await deleteLead(lead.id); onClose() }}
-              className="w-9 h-9 rounded-lg bg-red-50 dark:bg-red-900/20 flex items-center justify-center text-red-500 hover:bg-red-100 transition-colors"
-              title="Supprimer le lead"
-            >
-              <Trash2 className="w-4 h-4" />
+            {convertDone && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 12, background: '#F0FDF4', color: '#16A34A', fontSize: 12, fontWeight: 700 }}>
+                <CheckCircle className="w-3.5 h-3.5" /> Converti !
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Status changer ── */}
+      <div style={{ padding: '14px 0 4px', overflowX: 'auto' }}>
+        <p style={{ fontSize: 10, fontWeight: 700, color: '#6B88A8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Changer le statut</p>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {(Object.keys(STATUS_CONFIG) as LeadStatus[]).map(s => {
+            const c = STATUS_CONFIG[s]
+            const isActive = lead.status === s
+            return (
+              <button key={s} onClick={() => handleStatusChange(s)}
+                style={{ padding: '5px 12px', borderRadius: 99, fontSize: 11, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s', border: isActive ? 'none' : `1.5px solid ${c.bg}`, background: isActive ? c.text : c.bg, color: isActive ? '#fff' : c.text, flexShrink: 0 }}>
+                {c.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Assigné + Dernière action ── */}
+      <div style={{ display: 'flex', gap: 12, padding: '12px 16px', background: '#F8FAFF', borderRadius: 14, border: '1px solid #E2ECF8', margin: '8px 0' }}>
+        <div style={{ flex: 1 }}>
+          <p style={{ fontSize: 10, fontWeight: 700, color: '#6B88A8', textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 6px' }}>Assigné à</p>
+          <select value={lead.assignedTo ?? ''} onChange={e => {
+            const profile = profiles.find(p => p.id === e.target.value)
+            updateLead(lead.id, { assignedTo: e.target.value || undefined, assignedToName: profile?.name || undefined })
+          }}
+            style={{ width: '100%', fontSize: 13, fontWeight: 600, color: '#0A1628', border: '1px solid #E2ECF8', borderRadius: 10, padding: '6px 10px', background: '#fff', outline: 'none' }}>
+            <option value="">— Non assigné</option>
+            {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+        {lead.lastTouchedBy && (
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#6B88A8', textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 4px' }}>Dernière action</p>
+            <p style={{ fontSize: 12, fontWeight: 700, color: '#0A1628', margin: 0 }}>{lead.lastTouchedBy}</p>
+            <p style={{ fontSize: 11, color: '#6B88A8', margin: '2px 0 0' }}>{timeAgo(lead.lastTouchedAt ?? '')}</p>
+          </div>
+        )}
+      </div>
+
+      {/* ── Tabs ── */}
+      <div style={{ borderBottom: '2px solid #F0F7FF', display: 'flex', gap: 0, margin: '8px 0 0' }}>
+        {tabs.map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            style={{
+              padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: 'none',
+              color: activeTab === tab.id ? '#1A73E8' : '#6B88A8',
+              borderBottom: activeTab === tab.id ? '2px solid #1A73E8' : '2px solid transparent',
+              marginBottom: -2, transition: 'all 0.15s', whiteSpace: 'nowrap',
+            }}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Tab: Informations ── */}
+      {activeTab === 'info' && (
+        <div style={{ paddingTop: 4 }}>
+          <SectionTitle>Contact</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+            <InfoField label="Téléphone" value={lead.phone} />
+            <InfoField label="WhatsApp" value={lead.whatsapp} />
+            <InfoField label="Email" value={lead.email} />
+            <InfoField label="Ville" value={lead.city} />
+            <InfoField label="Genre" value={lead.genre === 'female' ? 'Femme' : lead.genre === 'male' ? 'Homme' : undefined} />
+            <InfoField label="Date de naissance" value={lead.dateNaissance ? formatDate(lead.dateNaissance) : undefined} />
+            <InfoField label="CIN" value={lead.cin} />
+            <InfoField label="Adresse" value={lead.adresse} />
+          </div>
+
+          <SectionTitle>Qualification</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+            <InfoField label="Objectif" value={lead.programInterest} />
+            <InfoField label="Profession" value={lead.profession} />
+            <InfoField label="Délai d'action" value={lead.delaiAction} />
+            <InfoField label="Disponibilité" value={lead.horairePreference} />
+            <InfoField label="Modalité" value={lead.modaliteParticipation === 'presentiel' ? 'Présentiel' : lead.modaliteParticipation === 'enligne' ? 'En ligne' : lead.modaliteParticipation} />
+            <InfoField label="Urgence" value={lead.interestLevel === 'high' ? '🔴 Urgent' : lead.interestLevel === 'medium' ? '🟠 Moyen terme' : lead.interestLevel === 'low' ? '🟢 Plus tard' : undefined} />
+          </div>
+
+          <SectionTitle>Source & CRM</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+            <InfoField label="Source" value={lead.source} />
+            <InfoField label="Campagne" value={lead.campaign} />
+            <InfoField label="Publicité" value={lead.adSet} />
+            <InfoField label="Réception" value={lead.createdAt ? new Date(lead.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : undefined} />
+            <InfoField label="Prochain rappel" value={lead.nextFollowUpDate ? formatDate(lead.nextFollowUpDate) : undefined} />
+          </div>
+
+          {lead.programTag === 'classes_avenir' && (lead.childName || lead.childAge || lead.childSchool) && (
+            <>
+              <SectionTitle>🏫 Infos enfant</SectionTitle>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                <InfoField label="Nom de l'enfant" value={lead.childName} />
+                <InfoField label="Âge" value={lead.childAge} />
+                <InfoField label="École" value={lead.childSchool} />
+                <InfoField label="Niveau scolaire" value={lead.childLevel} />
+              </div>
+            </>
+          )}
+
+          {(lead.prixFormation || lead.montantVerse) ? (
+            <>
+              <SectionTitle>💰 Paiement</SectionTitle>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                <InfoField label="Prix formation" value={lead.prixFormation ? `${lead.prixFormation.toLocaleString('fr-MA')} MAD` : undefined} />
+                <InfoField label="Montant versé" value={lead.montantVerse ? `${lead.montantVerse.toLocaleString('fr-MA')} MAD` : undefined} />
+                <InfoField label="Reste à payer" value={lead.prixFormation != null ? `${((lead.prixFormation ?? 0) - (lead.montantVerse ?? 0)).toLocaleString('fr-MA')} MAD` : undefined} />
+                <InfoField label="Modalité" value={lead.modalitePaiement === 'complet' ? 'Paiement complet' : lead.modalitePaiement === 'acompte' ? 'Acompte + solde' : lead.modalitePaiement === 'echelonne' ? 'Échelonné (3x)' : lead.modalitePaiement} />
+                {lead.dateVersement2 && <InfoField label="2e versement" value={formatDate(lead.dateVersement2)} />}
+                {lead.dateVersement3 && <InfoField label="3e versement" value={formatDate(lead.dateVersement3)} />}
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+
+      {/* ── Tab: Modifier ── */}
+      {activeTab === 'edit' && (
+        <div style={{ paddingTop: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Input label="Prénom" value={editForm.firstName} onChange={e => setEditForm(f => ({ ...f, firstName: e.target.value }))} />
+            <Input label="Nom" value={editForm.lastName} onChange={e => setEditForm(f => ({ ...f, lastName: e.target.value }))} />
+            <Input label="Téléphone" value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
+            <Input label="WhatsApp" value={editForm.whatsapp} onChange={e => setEditForm(f => ({ ...f, whatsapp: e.target.value }))} />
+            <div style={{ gridColumn: 'span 2' }}>
+              <Input label="Email" type="email" value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} />
+            </div>
+            <Input label="Ville" value={editForm.city} onChange={e => setEditForm(f => ({ ...f, city: e.target.value }))} />
+            <Input label="Profession" value={editForm.profession} onChange={e => setEditForm(f => ({ ...f, profession: e.target.value }))} />
+            <div style={{ gridColumn: 'span 2' }}>
+              <Input label="Programme intéressé" value={editForm.programInterest} onChange={e => setEditForm(f => ({ ...f, programInterest: e.target.value }))} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B88A8', marginBottom: 6 }}>Niveau d'urgence</label>
+              <select value={editForm.interestLevel} onChange={e => setEditForm(f => ({ ...f, interestLevel: e.target.value as any }))}
+                style={{ width: '100%', fontSize: 13, border: '1.5px solid #E2ECF8', borderRadius: 10, padding: '8px 12px', background: '#fff', color: '#0A1628', outline: 'none' }}>
+                <option value="">— Non défini</option>
+                <option value="low">🟢 Plus tard</option>
+                <option value="medium">🟠 Moyen terme</option>
+                <option value="high">🔴 Urgent</option>
+              </select>
+            </div>
+            <Input label="Prochain rappel" type="date" value={editForm.nextFollowUpDate} onChange={e => setEditForm(f => ({ ...f, nextFollowUpDate: e.target.value }))} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+            <button onClick={() => setActiveTab('info')}
+              style={{ padding: '9px 18px', borderRadius: 12, border: '1.5px solid #E2ECF8', background: '#fff', color: '#6B88A8', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              Annuler
+            </button>
+            <button onClick={handleSaveEdit} disabled={saving}
+              style={{ padding: '9px 18px', borderRadius: 12, border: 'none', background: '#1A73E8', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              {saving ? 'Enregistrement…' : 'Enregistrer'}
             </button>
           </div>
         </div>
+      )}
 
-        {/* Affectation */}
-        <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-          <div className="flex-1">
-            <p className="text-xs text-gray-400 mb-1">Assigné à</p>
-            <select
-              value={lead.assignedTo ?? ''}
-              onChange={e => handleAssign(e.target.value)}
-              className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">— Non assigné</option>
-              {profiles.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+      {/* ── Tab: Notes ── */}
+      {activeTab === 'notes' && (
+        <div style={{ paddingTop: 12 }}>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+            <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Ajouter une note commerciale…" rows={2}
+              style={{ flex: 1, fontSize: 13, border: '1.5px solid #E2ECF8', borderRadius: 12, padding: '10px 14px', background: '#F8FAFF', color: '#0A1628', resize: 'none', outline: 'none', fontFamily: 'inherit' }} />
+            <button onClick={handleAddNote} disabled={!note.trim()}
+              style={{ width: 42, height: 42, borderRadius: 12, border: 'none', background: '#1A73E8', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: note.trim() ? 'pointer' : 'not-allowed', opacity: note.trim() ? 1 : 0.5, flexShrink: 0, alignSelf: 'flex-start' }}>
+              <Send className="w-4 h-4" />
+            </button>
           </div>
-          {lead.lastTouchedBy && (
-            <div className="text-right shrink-0">
-              <p className="text-xs text-gray-400">Dernière action</p>
-              <p className="text-xs font-medium text-gray-700 dark:text-gray-300">{lead.lastTouchedBy}</p>
-              <p className="text-xs text-gray-400">{timeAgo(lead.lastTouchedAt ?? '')}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Status Change */}
-        <div>
-          <p className="text-xs font-medium text-gray-500 mb-2">Changer le statut</p>
-          <div className="flex gap-1.5 flex-wrap">
-            {(Object.keys(STATUS_CONFIG) as LeadStatus[]).map(s => (
-              <button
-                key={s}
-                onClick={() => handleStatusChange(s)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${lead.status === s ? 'ring-2 ring-blue-500 ring-offset-1' : 'opacity-60 hover:opacity-100'}`}
-              >
-                <Badge variant={STATUS_CONFIG[s].color}>{STATUS_CONFIG[s].label}</Badge>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="border-b border-gray-100 dark:border-gray-800">
-          <div className="flex gap-0.5">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${activeTab === tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Tab Content */}
-        {activeTab === 'info' && (
-          <div className="space-y-5">
-            {/* Contact */}
-            <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Contact</p>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: 'Téléphone', value: lead.phone },
-                  { label: 'WhatsApp', value: lead.whatsapp },
-                  { label: 'Email', value: lead.email },
-                  { label: 'Ville', value: lead.city },
-                  { label: 'Genre', value: lead.genre === 'female' ? 'Femme' : lead.genre === 'male' ? 'Homme' : undefined },
-                  { label: 'Date de naissance', value: lead.dateNaissance ? formatDate(lead.dateNaissance) : undefined },
-                  { label: 'CIN', value: lead.cin },
-                  { label: 'Adresse', value: lead.adresse },
-                ].map(({ label, value }) => (
-                  <div key={label}>
-                    <p className="text-xs text-gray-400 mb-0.5">{label}</p>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">{value || '—'}</p>
+          {lead.notes.length === 0
+            ? <p style={{ textAlign: 'center', color: '#6B88A8', fontSize: 13, padding: '32px 0' }}>Aucune note pour ce lead</p>
+            : [...lead.notes].reverse().map(n => (
+                <div key={n.id} style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 12, background: 'linear-gradient(135deg, #1A73E8, #4F94F0)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
+                    {n.authorName.charAt(0)}
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Formation / Qualification */}
-            <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Formation & Qualification</p>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: 'Objectif principal', value: lead.programInterest },
-                  { label: 'Situation professionnelle', value: lead.profession },
-                  { label: 'Délai pour passer à l\'action', value: lead.delaiAction },
-                  { label: 'Disponibilité', value: lead.horairePreference },
-                  { label: 'Modalité', value: lead.modaliteParticipation === 'presentiel' ? 'Présentiel' : lead.modaliteParticipation === 'enligne' ? 'En ligne' : lead.modaliteParticipation },
-                  { label: 'Urgence', value: lead.interestLevel === 'high' ? '🔴 Urgent' : lead.interestLevel === 'medium' ? '🟠 Moyen terme' : lead.interestLevel === 'low' ? '🟢 Plus tard' : undefined },
-                  { label: 'Source', value: lead.source },
-                  { label: 'Campagne', value: lead.campaign },
-                  { label: 'Pub', value: lead.adSet },
-                ].map(({ label, value }) => value ? (
-                  <div key={label}>
-                    <p className="text-xs text-gray-400 mb-0.5">{label}</p>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">{value}</p>
-                  </div>
-                ) : null)}
-              </div>
-            </div>
-
-            {/* Classes de l'Avenir — Infos enfant */}
-            {lead.programTag === 'classes_avenir' && (lead.childName || lead.childAge || lead.childSchool || lead.childLevel) && (
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">🏫 Infos enfant / jeune</p>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: 'Nom de l\'enfant', value: lead.childName },
-                    { label: 'Âge', value: lead.childAge },
-                    { label: 'École actuelle', value: lead.childSchool },
-                    { label: 'Niveau scolaire', value: lead.childLevel },
-                  ].map(({ label, value }) => value ? (
-                    <div key={label}>
-                      <p className="text-xs text-gray-400 mb-0.5">{label}</p>
-                      <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">{value}</p>
+                  <div style={{ flex: 1, background: '#F8FAFF', borderRadius: 14, padding: '10px 14px', border: '1px solid #E2ECF8' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#0A1628' }}>{n.authorName}</span>
+                      <span style={{ fontSize: 11, color: '#6B88A8' }}>{timeAgo(n.createdAt)}</span>
                     </div>
-                  ) : null)}
-                </div>
-              </div>
-            )}
-
-            {/* Paiement */}
-            {(lead.prixFormation || lead.montantVerse) ? (
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Paiement</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-xs text-gray-400 mb-0.5">Prix formation</p>
-                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{(lead.prixFormation ?? 0).toLocaleString('fr-MA')} MAD</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-0.5">Montant versé</p>
-                    <p className="text-sm font-semibold text-emerald-600">{(lead.montantVerse ?? 0).toLocaleString('fr-MA')} MAD</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-0.5">Reste à payer</p>
-                    <p className="text-sm font-semibold text-amber-600">{((lead.prixFormation ?? 0) - (lead.montantVerse ?? 0)).toLocaleString('fr-MA')} MAD</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-0.5">Modalité paiement</p>
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {lead.modalitePaiement === 'complet' ? 'Paiement complet' : lead.modalitePaiement === 'acompte' ? 'Acompte + solde' : lead.modalitePaiement === 'echelonne' ? 'Échelonné (3x)' : lead.modalitePaiement || '—'}
-                    </p>
-                  </div>
-                  {lead.dateVersement2 && (
-                    <div>
-                      <p className="text-xs text-gray-400 mb-0.5">2e versement prévu</p>
-                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{formatDate(lead.dateVersement2)}</p>
-                    </div>
-                  )}
-                  {lead.dateVersement3 && (
-                    <div>
-                      <p className="text-xs text-gray-400 mb-0.5">3e versement prévu</p>
-                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{formatDate(lead.dateVersement3)}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : null}
-
-            {/* CRM */}
-            <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">CRM</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-xs text-gray-400 mb-0.5">Date de réception</p>
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}
-                    {lead.createdAt ? <span className="text-gray-400 ml-1">{new Date(lead.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span> : null}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 mb-0.5">Prochain rappel</p>
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{lead.nextFollowUpDate ? formatDate(lead.nextFollowUpDate) : '—'}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'edit' && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Prénom</label>
-                <Input value={editForm.firstName} onChange={e => setEditForm(f => ({ ...f, firstName: e.target.value }))} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Nom</label>
-                <Input value={editForm.lastName} onChange={e => setEditForm(f => ({ ...f, lastName: e.target.value }))} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Téléphone</label>
-                <Input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">WhatsApp</label>
-                <Input value={editForm.whatsapp} onChange={e => setEditForm(f => ({ ...f, whatsapp: e.target.value }))} />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Email</label>
-                <Input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} type="email" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Ville</label>
-                <Input value={editForm.city} onChange={e => setEditForm(f => ({ ...f, city: e.target.value }))} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Profession</label>
-                <Input value={editForm.profession} onChange={e => setEditForm(f => ({ ...f, profession: e.target.value }))} />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Programme intéressé</label>
-                <Input value={editForm.programInterest} onChange={e => setEditForm(f => ({ ...f, programInterest: e.target.value }))} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Niveau d'intérêt</label>
-                <select
-                  value={editForm.interestLevel}
-                  onChange={e => setEditForm(f => ({ ...f, interestLevel: e.target.value as any }))}
-                  className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">— Non défini</option>
-                  <option value="low">Faible</option>
-                  <option value="medium">Moyen</option>
-                  <option value="high">Élevé</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Prochain rappel</label>
-                <Input value={editForm.nextFollowUpDate} onChange={e => setEditForm(f => ({ ...f, nextFollowUpDate: e.target.value }))} type="date" />
-              </div>
-            </div>
-            <div className="flex gap-2 justify-end pt-2">
-              <Button variant="outline" size="sm" icon={<X className="w-3.5 h-3.5" />} onClick={() => setActiveTab('info')}>Annuler</Button>
-              <Button variant="primary" size="sm" icon={<Save className="w-3.5 h-3.5" />} onClick={handleSaveEdit} disabled={saving}>
-                {saving ? 'Enregistrement…' : 'Enregistrer'}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'notes' && (
-          <div className="space-y-3">
-            <div className="flex gap-2">
-              <textarea
-                value={note}
-                onChange={e => setNote(e.target.value)}
-                placeholder="Ajouter une note commerciale…"
-                rows={2}
-                className="flex-1 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              />
-              <Button variant="primary" size="icon" onClick={handleAddNote} disabled={!note.trim()}>
-                <Send className="w-4 h-4" />
-              </Button>
-            </div>
-            {lead.notes.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-4">Aucune note pour ce lead</p>
-            ) : (
-              <div className="space-y-3">
-                {[...lead.notes].reverse().map(n => (
-                  <div key={n.id} className="flex gap-3">
-                    <Avatar name={n.authorName} size="sm" />
-                    <div className="flex-1 bg-gray-50 dark:bg-gray-800 rounded-xl p-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{n.authorName}</span>
-                        <span className="text-xs text-gray-400">{timeAgo(n.createdAt)}</span>
-                      </div>
-                      <p className="text-sm text-gray-700 dark:text-gray-300">{n.content}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'history' && (
-          <div className="space-y-3">
-            {lead.followUps.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-4">Aucun historique de suivi</p>
-            ) : (
-              lead.followUps.map(fu => (
-                <div key={fu.id} className="flex gap-3 items-start">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${fu.type === 'call' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' : fu.type === 'whatsapp' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-600'}`}>
-                    {fu.type === 'call' ? <Phone className="w-4 h-4" /> : fu.type === 'whatsapp' ? <MessageCircle className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 capitalize">{fu.type} — {fu.outcome}</span>
-                      <span className="text-xs text-gray-400">{formatDate(fu.date)}</span>
-                    </div>
-                    {fu.notes && <p className="text-xs text-gray-500 mt-0.5">{fu.notes}</p>}
-                    <p className="text-xs text-gray-400 mt-0.5">par {fu.authorName}</p>
+                    <p style={{ fontSize: 13, color: '#334155', margin: 0 }}>{n.content}</p>
                   </div>
                 </div>
               ))
-            )}
-          </div>
+          }
+        </div>
+      )}
+
+      {/* ── Tab: Historique ── */}
+      {activeTab === 'history' && (
+        <div style={{ paddingTop: 12 }}>
+          {lead.followUps.length === 0
+            ? <p style={{ textAlign: 'center', color: '#6B88A8', fontSize: 13, padding: '32px 0' }}>Aucun historique de suivi</p>
+            : lead.followUps.map(fu => {
+                const iconBg = fu.type === 'call' ? 'linear-gradient(135deg,#1A73E8,#4F94F0)' : fu.type === 'whatsapp' ? 'linear-gradient(135deg,#059669,#34d399)' : 'linear-gradient(135deg,#6B88A8,#94a3b8)'
+                const Icon = fu.type === 'call' ? Phone : fu.type === 'whatsapp' ? MessageCircle : Mail
+                return (
+                  <div key={fu.id} style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-start' }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 12, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Icon className="w-4 h-4 text-white" />
+                    </div>
+                    <div style={{ flex: 1, background: '#F8FAFF', borderRadius: 14, padding: '10px 14px', border: '1px solid #E2ECF8' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#0A1628', textTransform: 'capitalize' }}>{fu.type} — {fu.outcome}</span>
+                        <span style={{ fontSize: 11, color: '#6B88A8' }}>{formatDate(fu.date)}</span>
+                      </div>
+                      {fu.notes && <p style={{ fontSize: 12, color: '#64748B', margin: '2px 0 0' }}>{fu.notes}</p>}
+                      <p style={{ fontSize: 11, color: '#6B88A8', margin: '3px 0 0' }}>par {fu.authorName}</p>
+                    </div>
+                  </div>
+                )
+              })
+          }
+        </div>
+      )}
+
+      {/* ── Bottom action bar ── */}
+      <div style={{ margin: '16px -24px -24px', padding: '14px 20px', background: '#F8FAFF', borderTop: '1px solid #E2ECF8', borderRadius: '0 0 16px 16px', display: 'flex', gap: 10 }}>
+        <button onClick={() => setActiveTab('notes')}
+          style={{ flex: 1, padding: '11px 0', borderRadius: 14, border: '1.5px solid #E2ECF8', background: '#fff', color: '#1A73E8', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <Send className="w-4 h-4" /> Ajouter une note
+        </button>
+        {lead.phone && (
+          <a href={`tel:${lead.phone}`}
+            style={{ flex: 1, padding: '11px 0', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg, #1A73E8, #4F94F0)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, textDecoration: 'none' }}>
+            <Phone className="w-4 h-4" /> Appeler
+          </a>
         )}
+        <button onClick={async () => { if (!confirm(`Supprimer ${lead.firstName} ?`)) return; await deleteLead(lead.id); onClose() }}
+          style={{ width: 44, height: 44, borderRadius: 14, border: '1.5px solid #FEE2E2', background: '#FEF2F2', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Trash2 className="w-4 h-4" />
+        </button>
       </div>
     </Modal>
   )

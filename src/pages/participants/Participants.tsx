@@ -1,13 +1,11 @@
-import { useState, useMemo } from 'react'
+﻿import { useState, useMemo, useEffect } from 'react'
 import { Plus, Search, Phone, Mail } from 'lucide-react'
 import DateRangeFilter, { type Preset, type DateRange, getRange, inRange } from '../../components/ui/DateRangeFilter'
-import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Avatar } from '../../components/ui/Avatar'
-import { Table, Thead, Th, Tbody, Tr, Td } from '../../components/ui/Table'
-import { Progress } from '../../components/ui/Progress'
+import { PageHero, HeroBtn } from '../../components/ui/PageHero'
 import { useAppStore } from '../../store/appStore'
 import { formatDate } from '../../lib/utils'
 import type { Participant } from '../../types'
@@ -22,6 +20,12 @@ const TYPE_CONFIG = {
 
 export default function Participants() {
   const { participants, coachingPacks } = useAppStore()
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'coaching' | 'training' | 'both'>('all')
   const [paymentModeFilter, setPaymentModeFilter] = useState('all')
@@ -45,36 +49,49 @@ export default function Participants() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Participants</h2>
-          <p className="text-sm text-gray-500 mt-0.5">{participants.filter(p => p.isActive).length} participants actifs</p>
-        </div>
-        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setShowAdd(true)}>
-          Nouveau participant
-        </Button>
-      </div>
+      <PageHero
+        emoji="🎓"
+        title="Participants"
+        sub={`${participants.filter(p => p.isActive).length} participants actifs`}
+        gradient="linear-gradient(135deg, #064e3b 0%, #059669 60%, #34d399 100%)"
+        actions={<HeroBtn onClick={() => setShowAdd(true)}>+ Nouveau participant</HeroBtn>}
+        stats={[
+          { label: 'Coaching', value: participants.filter(p => p.type === 'coaching' && p.isActive).length },
+          { label: 'Formation', value: participants.filter(p => p.type === 'training' && p.isActive).length },
+          { label: 'Les deux', value: participants.filter(p => p.type === 'both' && p.isActive).length },
+        ]}
+      />
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        {(['coaching', 'training', 'both'] as const).map(type => {
-          const count = participants.filter(p => p.type === type && p.isActive).length
-          const config = TYPE_CONFIG[type]
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+        {[
+          { type: 'all' as const, label: 'Tous', count: participants.filter(p => p.isActive).length, bg: '#EFF6FF', color: '#1A73E8' },
+          { type: 'coaching' as const, label: 'Coaching', count: participants.filter(p => p.type === 'coaching' && p.isActive).length, bg: '#F0FDF4', color: '#16A34A' },
+          { type: 'training' as const, label: 'Formation', count: participants.filter(p => p.type === 'training' && p.isActive).length, bg: '#F5F3FF', color: '#7C3AED' },
+          { type: 'both' as const, label: 'Coaching & Formation', count: participants.filter(p => p.type === 'both' && p.isActive).length, bg: '#FFF7ED', color: '#EA580C' },
+        ].map(item => {
+          const isActive = typeFilter === item.type
           return (
             <button
-              key={type}
-              onClick={() => setTypeFilter(typeFilter === type ? 'all' : type)}
-              className={`p-4 rounded-xl border text-center transition-all bg-white dark:bg-gray-900 ${typeFilter === type ? 'ring-2 ring-blue-500 ring-offset-1 border-blue-200 dark:border-blue-800' : 'border-gray-200 dark:border-gray-800 hover:border-gray-300'}`}
+              key={item.type}
+              onClick={() => setTypeFilter(item.type === 'all' ? 'all' : (typeFilter === item.type ? 'all' : item.type))}
+              style={{
+                flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6,
+                padding: '7px 14px', borderRadius: 99,
+                border: isActive ? 'none' : `1.5px solid ${item.bg}`,
+                background: isActive ? item.color : item.bg,
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
             >
-              <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{count}</div>
-              <Badge variant={config.color} className="mt-1">{config.label}</Badge>
+              <span style={{ fontSize: 14, fontWeight: 800, color: isActive ? '#fff' : item.color }}>{item.count}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? 'rgba(255,255,255,0.85)' : item.color, whiteSpace: 'nowrap' }}>{item.label}</span>
             </button>
           )
         })}
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 flex-wrap items-center">
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2, flexWrap: isMobile ? 'nowrap' : 'wrap', alignItems: 'center' }}>
         <div className="flex-1 min-w-48">
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un participant…" icon={<Search className="w-4 h-4" />} />
         </div>
@@ -96,80 +113,68 @@ export default function Participants() {
         </select>
       </div>
 
-      {/* Table */}
-      <Card padding="none">
-        <Table>
-          <Thead>
-            <tr>
-              <Th>Participant</Th>
-              <Th>Contact</Th>
-              <Th>Type</Th>
-              <Th>Profession</Th>
-              <Th>Pack coaching</Th>
-              <Th>Inscription</Th>
-              <Th>Tags</Th>
-            </tr>
-          </Thead>
-          <Tbody>
-            {filtered.map(p => {
-              const packs = coachingPacks.filter(cp => cp.participantId === p.id && cp.status === 'active')
-              const activePack = packs[0]
-              return (
-                <Tr key={p.id} onClick={() => setSelectedParticipant(p)}>
-                  <Td>
-                    <div className="flex items-center gap-3">
-                      <Avatar name={`${p.firstName} ${p.lastName}`} size="sm" />
-                      <div>
-                        <p className="font-semibold text-gray-900 dark:text-gray-100">{p.firstName} {p.lastName}</p>
-                        {p.company && <p className="text-xs text-gray-400">{p.company}</p>}
-                      </div>
-                    </div>
-                  </Td>
-                  <Td>
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
-                        <Phone className="w-3 h-3 text-gray-400" /> {p.phone}
-                      </div>
-                      {p.email && (
-                        <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                          <Mail className="w-3 h-3" /> {p.email}
-                        </div>
-                      )}
-                    </div>
-                  </Td>
-                  <Td>
-                    <Badge variant={TYPE_CONFIG[p.type].color}>{TYPE_CONFIG[p.type].label}</Badge>
-                  </Td>
-                  <Td>
-                    <span className="text-xs">{p.profession || '—'}</span>
-                  </Td>
-                  <Td>
-                    {activePack ? (
-                      <div className="min-w-32">
-                        <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{activePack.usedSessions}/{activePack.totalSessions} séances</p>
-                        <Progress value={activePack.usedSessions} max={activePack.totalSessions} size="sm" color="blue" showLabel />
-                      </div>
-                    ) : p.type !== 'training' ? (
-                      <span className="text-xs text-gray-400">Aucun pack</span>
-                    ) : null}
-                  </Td>
-                  <Td><span className="text-xs text-gray-400">{formatDate(p.createdAt)}</span></Td>
-                  <Td>
-                    <div className="flex gap-1 flex-wrap">
-                      {(p.tags || []).slice(0, 2).map(tag => (
-                        <span key={tag} className="text-xs px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">{tag}</span>
-                      ))}
-                    </div>
-                  </Td>
-                </Tr>
-              )
-            })}
-            {filtered.length === 0 && (
-              <Tr><Td className="text-center text-gray-400 py-12" colSpan={7 as any}>Aucun participant trouvé</Td></Tr>
-            )}
-          </Tbody>
-        </Table>
-      </Card>
+      {/* List */}
+      <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #E2ECF8', boxShadow: '0 2px 12px rgba(26,115,232,0.06)', overflow: 'hidden' }}>
+        {filtered.map((p, i) => {
+          const packs = coachingPacks.filter(cp => cp.participantId === p.id && cp.status === 'active')
+          const activePack = packs[0]
+          const tc = TYPE_CONFIG[p.type]
+          const TYPE_BADGE: Record<string, { bg: string; color: string }> = {
+            coaching:  { bg: '#EFF6FF', color: '#1A73E8' },
+            training:  { bg: '#F5F3FF', color: '#7C3AED' },
+            both:      { bg: '#F0FDF4', color: '#16A34A' },
+          }
+          const tb = TYPE_BADGE[p.type] || { bg: '#F8FAFC', color: '#64748B' }
+          return (
+            <div
+              key={p.id}
+              onClick={() => setSelectedParticipant(p)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 14,
+                padding: '14px 18px',
+                borderBottom: i < filtered.length - 1 ? '1px solid #F0F7FF' : 'none',
+                cursor: 'pointer', transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#FAFCFF')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <Avatar name={`${p.firstName} ${p.lastName}`} size="md" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontWeight: 700, fontSize: 14, color: '#0A1628', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {p.firstName} {p.lastName}
+                </p>
+                <p style={{ fontSize: 12, color: '#6B88A8', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {p.profession || p.company || '—'}
+                </p>
+                <p style={{ fontSize: 11, color: '#94A3B8', margin: '1px 0 0' }}>
+                  Inscrit le {formatDate(p.createdAt)}
+                  {activePack ? ` · ${activePack.usedSessions}/${activePack.totalSessions} séances` : ''}
+                </p>
+              </div>
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                <a href={`tel:${p.phone}`} onClick={e => e.stopPropagation()}
+                  style={{ width: 32, height: 32, borderRadius: 10, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1A73E8', textDecoration: 'none' }}>
+                  <Phone className="w-3.5 h-3.5" />
+                </a>
+                {p.email && (
+                  <a href={`mailto:${p.email}`} onClick={e => e.stopPropagation()}
+                    style={{ width: 32, height: 32, borderRadius: 10, background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', textDecoration: 'none' }}>
+                    <Mail className="w-3.5 h-3.5" />
+                  </a>
+                )}
+              </div>
+              {/* Type badge */}
+              <span style={{ padding: '4px 12px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: tb.bg, color: tb.color, flexShrink: 0 }}>
+                {tc.label}
+              </span>
+            </div>
+          )
+        })}
+        {filtered.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '64px 16px', color: '#94A3B8', fontSize: 14 }}>Aucun participant trouvé</div>
+        )}
+      </div>
 
       {selectedParticipant && <ParticipantDetail participant={selectedParticipant} onClose={() => setSelectedParticipant(null)} />}
       {showAdd && <AddParticipantModal onClose={() => setShowAdd(false)} />}

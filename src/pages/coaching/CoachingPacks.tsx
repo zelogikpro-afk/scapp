@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { BookOpen, Plus, Trash2, Pencil, Search } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
@@ -7,6 +7,7 @@ import { Progress } from '../../components/ui/Progress'
 import { Avatar } from '../../components/ui/Avatar'
 import { Modal } from '../../components/ui/Modal'
 import { Input } from '../../components/ui/Input'
+import { PageHero, HeroBtn } from '../../components/ui/PageHero'
 import { useAppStore } from '../../store/appStore'
 import { useAuthStore } from '../../store/authStore'
 import { formatCurrency, formatDate } from '../../lib/utils'
@@ -31,6 +32,12 @@ const EMPTY = {
 export default function CoachingPacks() {
   const { coachingPacks, participants, coachingSessions, addCoachingPack, updateCoachingPack, deleteCoachingPack } = useAppStore()
   const { user } = useAuthStore()
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [participantFilter, setParticipantFilter] = useState<string>('all')
@@ -83,15 +90,20 @@ export default function CoachingPacks() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Packs de Coaching</h2>
-          <p className="text-sm text-gray-500">{coachingPacks.filter(p => p.status === 'active').length} packs actifs</p>
-        </div>
-        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => { setEditId(null); setForm({ ...EMPTY }); setShowModal(true) }}>Nouveau pack</Button>
-      </div>
+      <PageHero
+        emoji="🎯"
+        title="Packs de Coaching"
+        sub={`${coachingPacks.filter(p => p.status === 'active').length} packs actifs`}
+        gradient="linear-gradient(135deg, #4c1d95 0%, #7c3aed 60%, #a78bfa 100%)"
+        actions={<HeroBtn onClick={() => { setEditId(null); setForm({ ...EMPTY }); setShowModal(true) }}><Plus className="w-3.5 h-3.5" /> Nouveau pack</HeroBtn>}
+        stats={[
+          { label: 'Actifs', value: coachingPacks.filter(p => p.status === 'active').length },
+          { label: 'Terminés', value: coachingPacks.filter(p => p.status === 'completed').length },
+          { label: 'Total séances', value: coachingPacks.reduce((s, p) => s + p.usedSessions, 0) },
+        ]}
+      />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: isMobile ? 8 : 16 }}>
         {(['active', 'completed', 'paused', 'expired'] as const).map(status => (
           <button key={status} onClick={() => setStatusFilter(s => s === status ? 'all' : status)}
             className={`p-4 rounded-xl border text-left transition-all bg-white dark:bg-gray-900 ${statusFilter === status ? 'ring-2 ring-blue-500 ring-offset-1 border-blue-200 dark:border-blue-800' : 'border-gray-200 dark:border-gray-800 hover:border-gray-300'}`}>
@@ -114,7 +126,7 @@ export default function CoachingPacks() {
         </select>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
         {filteredPacks.map(pack => {
           const participant = participants.find(p => p.id === pack.participantId)
           const remaining = pack.totalSessions - pack.usedSessions

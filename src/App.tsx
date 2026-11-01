@@ -10,6 +10,7 @@ import { useAuthStore } from './store/authStore'
 import { useAppStore } from './store/appStore'
 
 import Login from './pages/auth/Login'
+import AppHome from './pages/home/AppHome'
 import Dashboard from './pages/dashboard/Dashboard'
 import CRM from './pages/crm/CRM'
 import Participants from './pages/participants/Participants'
@@ -55,6 +56,18 @@ import EspaceObjectifs from './pages/espace/EspaceObjectifs'
 import EspaceProfil from './pages/espace/EspaceProfil'
 import EspaceCoaching from './pages/espace/EspaceCoaching'
 import EspaceInscriptionNiveau from './pages/espace/EspaceInscriptionNiveau'
+import EspaceAdminLayout from './pages/espace/admin/EspaceAdminLayout'
+import EspaceAdminDashboard from './pages/espace/admin/EspaceAdminDashboard'
+import EspaceAdminApprenantes from './pages/espace/admin/EspaceAdminApprenantes'
+import EspaceAdminAnnonces from './pages/espace/admin/EspaceAdminAnnonces'
+import EspaceAdminAgenda from './pages/espace/admin/EspaceAdminAgenda'
+import EspaceAdminPlus from './pages/espace/admin/EspaceAdminPlus'
+import EspaceAdminVideos from './pages/espace/admin/EspaceAdminVideos'
+import EspaceAdminDocuments from './pages/espace/admin/EspaceAdminDocuments'
+import EspaceAdminTests from './pages/espace/admin/EspaceAdminTests'
+import EspaceAdminPromotions from './pages/espace/admin/EspaceAdminPromotions'
+import EspaceAdminMessages from './pages/espace/admin/EspaceAdminMessages'
+import EspaceAdminCoaching from './pages/espace/admin/EspaceAdminCoaching'
 import Demandes from './pages/admin/Demandes'
 import ElearningAdmin from './pages/elearning/ElearningAdmin'
 import TrainerLogin from './pages/formateur/TrainerLogin'
@@ -71,6 +84,8 @@ import DigitalAccueil from './pages/digital/DigitalAccueil'
 import DigitalTaches from './pages/digital/DigitalTaches'
 import DigitalCreer from './pages/digital/DigitalCreer'
 import DigitalPosts from './pages/digital/DigitalPosts'
+import CoachesDirectory from './pages/coaches/CoachesDirectory'
+import CoachProfile from './pages/coaches/CoachProfile'
 
 import { getLearnerSession } from './lib/learnerSession'
 import type { Role } from './types'
@@ -151,6 +166,8 @@ export default function App() {
       <Toaster position="top-right" toastOptions={{ style: { borderRadius: '12px', fontSize: '14px' } }} />
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/coaches" element={<CoachesDirectory />} />
+        <Route path="/coaches/:slug" element={<CoachProfile />} />
         <Route path="/s/inscription" element={<InscriptionPublique />} />
         <Route path="/s/classes-avenir" element={<InscriptionClassesAvenirPublique />} />
         <Route path="/test/mapping" element={<RequireLearner><TestMappingPage /></RequireLearner>} />
@@ -180,6 +197,19 @@ export default function App() {
           <Route path="posts"   element={<DigitalPosts />} />
           <Route index           element={<Navigate to="/digital/accueil" replace />} />
         </Route>
+        <Route path="/espace/admin" element={<EspaceAdminLayout />}>
+          <Route index                    element={<EspaceAdminDashboard />} />
+          <Route path="apprenantes"       element={<EspaceAdminApprenantes />} />
+          <Route path="annonces"          element={<EspaceAdminAnnonces />} />
+          <Route path="agenda"            element={<EspaceAdminAgenda />} />
+          <Route path="plus"              element={<EspaceAdminPlus />} />
+          <Route path="videos"            element={<EspaceAdminVideos />} />
+          <Route path="documents"         element={<EspaceAdminDocuments />} />
+          <Route path="tests"             element={<EspaceAdminTests />} />
+          <Route path="promotions"        element={<EspaceAdminPromotions />} />
+          <Route path="messages"          element={<EspaceAdminMessages />} />
+          <Route path="coaching"          element={<EspaceAdminCoaching />} />
+        </Route>
         <Route path="/espace" element={<EspaceLayout />}>
           <Route path="accueil"          element={<EspaceAccueil />} />
           <Route path="agenda"           element={<EspaceAgenda />} />
@@ -197,28 +227,30 @@ export default function App() {
           <Route path="inscription-niveau"    element={<EspaceInscriptionNiveau />} />
           <Route index                        element={<Navigate to="/espace/accueil" replace />} />
         </Route>
-        <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
-          <Route index element={<Dashboard />} />
-          <Route path="crm"               element={<RequireRole path="/crm"><CRM /></RequireRole>} />
-          <Route path="participants"      element={<RequireRole path="/participants"><Participants /></RequireRole>} />
-          <Route path="coaching/packs"    element={<RequireRole path="/coaching/packs"><CoachingPacks /></RequireRole>} />
-          <Route path="coaching/sessions" element={<RequireRole path="/coaching/sessions"><CoachingSessions /></RequireRole>} />
-          <Route path="training"          element={<RequireRole path="/training"><Training /></RequireRole>} />
-          <Route path="payments"          element={<RequireRole path="/payments"><Payments /></RequireRole>} />
-          <Route path="recu-paiement"    element={<RequireRole path="/recu-paiement"><RecuPaiement /></RequireRole>} />
-          <Route path="calendar"          element={<CalendarPage />} />
-          <Route path="tests"             element={<RequireRole path="/tests"><Tests /></RequireRole>} />
-          <Route path="documents"         element={<RequireRole path="/documents"><Documents /></RequireRole>} />
-          <Route path="certificates"      element={<RequireRole path="/certificates"><Certificates /></RequireRole>} />
-          <Route path="tasks"             element={<Tasks />} />
-          <Route path="purchases"         element={<RequireRole path="/purchases"><Purchases /></RequireRole>} />
-          <Route path="inscription"         element={<RequireRole path="/inscription"><Inscription /></RequireRole>} />
-          <Route path="inscription-classes-avenir" element={<RequireRole path="/inscription"><InscriptionClassesAvenir /></RequireRole>} />
-          <Route path="inscriptions"        element={<RequireRole path="/inscriptions"><ProspectsList /></RequireRole>} />
-          <Route path="reports"           element={<RequireRole path="/reports"><Reports /></RequireRole>} />
-          <Route path="settings"          element={<RequireRole path="/settings"><Settings /></RequireRole>} />
-          <Route path="elearning"         element={<ElearningAdmin />} />
-          <Route path="demandes"          element={<Demandes />} />
+        {/* Module pages — inside Layout shell (sidebar + topbar) */}
+        <Route element={<RequireAuth><Layout /></RequireAuth>}>
+          <Route path="/" element={<AppHome />} />
+          <Route path="/dashboard"        element={<Dashboard />} />
+          <Route path="/crm"              element={<RequireRole path="/crm"><CRM /></RequireRole>} />
+          <Route path="/participants"     element={<RequireRole path="/participants"><Participants /></RequireRole>} />
+          <Route path="/coaching/packs"   element={<RequireRole path="/coaching/packs"><CoachingPacks /></RequireRole>} />
+          <Route path="/coaching/sessions" element={<RequireRole path="/coaching/sessions"><CoachingSessions /></RequireRole>} />
+          <Route path="/training"         element={<RequireRole path="/training"><Training /></RequireRole>} />
+          <Route path="/payments"         element={<RequireRole path="/payments"><Payments /></RequireRole>} />
+          <Route path="/recu-paiement"   element={<RequireRole path="/recu-paiement"><RecuPaiement /></RequireRole>} />
+          <Route path="/calendar"         element={<CalendarPage />} />
+          <Route path="/tests"            element={<RequireRole path="/tests"><Tests /></RequireRole>} />
+          <Route path="/documents"        element={<RequireRole path="/documents"><Documents /></RequireRole>} />
+          <Route path="/certificates"     element={<RequireRole path="/certificates"><Certificates /></RequireRole>} />
+          <Route path="/tasks"            element={<Tasks />} />
+          <Route path="/purchases"        element={<RequireRole path="/purchases"><Purchases /></RequireRole>} />
+          <Route path="/inscription"        element={<RequireRole path="/inscription"><Inscription /></RequireRole>} />
+          <Route path="/inscription-classes-avenir" element={<RequireRole path="/inscription"><InscriptionClassesAvenir /></RequireRole>} />
+          <Route path="/inscriptions"       element={<RequireRole path="/inscriptions"><ProspectsList /></RequireRole>} />
+          <Route path="/reports"          element={<RequireRole path="/reports"><Reports /></RequireRole>} />
+          <Route path="/settings"         element={<RequireRole path="/settings"><Settings /></RequireRole>} />
+          <Route path="/elearning"        element={<ElearningAdmin />} />
+          <Route path="/demandes"         element={<Demandes />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

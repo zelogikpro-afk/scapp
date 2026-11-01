@@ -52,13 +52,18 @@ export default function EspaceEnregistrements() {
 
   const totalCount = groups.reduce((s, g) => s + g.recordings.length, 0)
 
-  if (loading) return <div className="text-center py-20 text-gray-400">Chargement…</div>
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 80, paddingBottom: 80 }}>
+      <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #F0EEFF', borderTopColor: '#6C5CE7', animation: 'spin 0.8s linear infinite' }} />
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  )
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Enregistrements</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{totalCount} enregistrement{totalCount > 1 ? 's' : ''} · {groups.length} session{groups.length > 1 ? 's' : ''}</p>
+    <div className="space-y-5" style={{ paddingTop: 16 }}>
+      <div style={{ background: 'linear-gradient(135deg,#6C5CE7,#8B5CF6)', borderRadius: 20, padding: '20px', marginBottom: 4 }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 2 }}>Séances vidéo</div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)' }}>{totalCount} enregistrement{totalCount > 1 ? 's' : ''} · {groups.length} session{groups.length > 1 ? 's' : ''}</div>
       </div>
 
       {/* Player */}
@@ -131,21 +136,23 @@ export default function EspaceEnregistrements() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden divide-y divide-gray-50">
+              <div className="bg-white rounded-2xl overflow-hidden divide-y" style={{ boxShadow: '0 2px 8px rgba(108,92,231,0.08)', borderColor: '#F0EEFF' }}>
                 {group.recordings.map((r, i) => (
                   <button key={r.id} onClick={() => setSelected(selected?.id === r.id ? null : r)}
-                    className={`w-full flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors text-left ${selected?.id === r.id ? 'bg-blue-50' : ''}`}>
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-sm font-bold ${selected?.id === r.id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                    className={`w-full flex items-center gap-4 px-5 py-4 transition-colors text-left`}
+                    style={{ background: selected?.id === r.id ? '#F0EEFF' : 'transparent' }}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-sm font-bold"
+                      style={{ background: selected?.id === r.id ? '#6C5CE7' : '#F5F4FF', color: selected?.id === r.id ? '#fff' : '#8B8AAA' }}>
                       {i + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`font-medium text-sm ${selected?.id === r.id ? 'text-blue-700' : 'text-gray-900'}`}>{r.title}</p>
+                      <p className="font-medium text-sm" style={{ color: selected?.id === r.id ? '#6C5CE7' : '#1E1B4B' }}>{r.title}</p>
                       <div className="flex items-center gap-3 mt-0.5">
                         <span className="text-xs text-gray-400">{new Date(r.created_at).toLocaleDateString('fr-FR')}</span>
                         {r.duration_minutes > 0 && <span className="text-xs text-gray-400 flex items-center gap-1"><Clock className="w-3 h-3" />{r.duration_minutes} min</span>}
                       </div>
                     </div>
-                    <PlayCircle className={`w-5 h-5 flex-shrink-0 ${selected?.id === r.id ? 'text-blue-600' : 'text-gray-300'}`} />
+                    <PlayCircle className="w-5 h-5 flex-shrink-0" style={{ color: selected?.id === r.id ? '#6C5CE7' : '#C4C2DD' }} />
                   </button>
                 ))}
               </div>

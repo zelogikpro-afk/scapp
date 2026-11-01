@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+﻿import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Menu, Search, Bell, Sun, Moon, LogOut, ChevronDown, Check } from 'lucide-react'
 import { cn, timeAgo } from '../../lib/utils'
@@ -165,41 +165,42 @@ export function TopBar({ onMenuClick, title }: TopBarProps) {
   }, [])
 
   return (
-    <header className="sticky top-0 z-10 h-14 bg-white/80 dark:bg-gray-950/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex items-center px-4 gap-3">
-      <button onClick={onMenuClick} className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500">
-        <Menu className="w-5 h-5" />
+    <header style={{ position: 'sticky', top: 0, zIndex: 10, height: 56, background: '#fff', borderBottom: '1px solid #D4E6FF', display: 'flex', alignItems: 'center', padding: '0 16px', gap: 12, boxShadow: '0 1px 8px rgba(26,115,232,0.06)' }}>
+      {/* Hamburger mobile */}
+      <button onClick={onMenuClick} className="lg:hidden" style={{ padding: 6, borderRadius: 8, background: '#E8F1FF', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+        <Menu style={{ width: 18, height: 18, color: '#1A73E8' }} />
       </button>
 
-      {title && <h1 className="text-base font-semibold text-gray-900 dark:text-gray-100 hidden sm:block">{title}</h1>}
+      {title && <h1 style={{ fontSize: 15, fontWeight: 700, color: '#0A1628', display: 'none', margin: 0 }} className="sm:block">{title}</h1>}
 
       {/* Search */}
-      <div className="flex-1 max-w-md mx-auto relative">
+      <div style={{ flex: 1, maxWidth: 440, margin: '0 auto', position: 'relative' }}>
         <button
           onClick={() => setShowSearch(true)}
-          className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-gray-400 text-sm hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '7px 14px', borderRadius: 10, border: '1.5px solid #D4E6FF', background: '#F0F7FF', color: '#6B88A8', fontSize: 13, cursor: 'text' }}
         >
-          <Search className="w-4 h-4 flex-shrink-0" />
-          <span className="flex-1 text-left">Rechercher…</span>
-          <kbd className="text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-1.5 py-0.5 rounded hidden sm:inline">⌘K</kbd>
+          <Search style={{ width: 14, height: 14, flexShrink: 0 }} />
+          <span style={{ flex: 1, textAlign: 'left' }}>Rechercher…</span>
+          <kbd style={{ fontSize: 11, background: '#fff', border: '1px solid #D4E6FF', padding: '1px 6px', borderRadius: 5 }} className="hidden sm:inline">⌘K</kbd>
         </button>
         {showSearch && <SearchPanel onClose={() => setShowSearch(false)} />}
       </div>
 
-      <div className="flex items-center gap-1 ml-auto">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
         {/* Dark mode */}
-        <button onClick={toggleDark} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors">
-          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        <button onClick={toggleDark} style={{ padding: 7, borderRadius: 8, background: 'none', border: 'none', cursor: 'pointer', color: '#6B88A8' }}>
+          {isDark ? <Sun style={{ width: 16, height: 16 }} /> : <Moon style={{ width: 16, height: 16 }} />}
         </button>
 
         {/* Notifications */}
-        <div className="relative">
+        <div style={{ position: 'relative' }}>
           <button
             onClick={() => { setShowNotifs(!showNotifs); setShowUser(false) }}
-            className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors"
+            style={{ padding: 7, borderRadius: 8, background: 'none', border: 'none', cursor: 'pointer', color: '#6B88A8', position: 'relative', display: 'flex' }}
           >
-            <Bell className="w-4 h-4" />
+            <Bell style={{ width: 16, height: 16 }} />
             {unread > 0 && (
-              <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 rounded-full text-white text-xs font-bold flex items-center justify-center leading-none">
+              <span style={{ position: 'absolute', top: 4, right: 4, width: 14, height: 14, background: '#EF4444', borderRadius: '50%', color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {unread > 9 ? '9+' : unread}
               </span>
             )}
@@ -209,32 +210,34 @@ export function TopBar({ onMenuClick, title }: TopBarProps) {
 
         {/* User Menu */}
         {user && (
-          <div ref={userRef} className="relative">
+          <div ref={userRef} style={{ position: 'relative' }}>
             <button
               onClick={() => { setShowUser(!showUser); setShowNotifs(false) }}
-              className="flex items-center gap-2 pl-2 pr-2.5 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderRadius: 10, background: '#F0F7FF', border: 'none', cursor: 'pointer' }}
             >
-              <Avatar name={user.name} size="sm" />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 hidden sm:block max-w-28 truncate">{user.name.split(' ')[0]}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+              <div style={{ width: 26, height: 26, borderRadius: 8, background: 'linear-gradient(135deg,#1A73E8,#8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                {user.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#0A1628', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} className="hidden sm:block">{user.name.split(' ')[0]}</span>
+              <ChevronDown style={{ width: 13, height: 13, color: '#6B88A8' }} />
             </button>
             {showUser && (
-              <div className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-800 z-50 py-1.5">
-                <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 mb-1">
-                  <p className="text-xs font-semibold text-gray-900 dark:text-gray-100">{user.name}</p>
-                  <p className="text-xs text-gray-500">{user.email}</p>
+              <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 8px)', width: 220, background: '#fff', borderRadius: 14, boxShadow: '0 8px 32px rgba(26,115,232,0.15)', border: '1px solid #D4E6FF', zIndex: 50, padding: '8px' }}>
+                <div style={{ padding: '8px 10px 10px', borderBottom: '1px solid #F0F7FF', marginBottom: 4 }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#0A1628', margin: 0 }}>{user.name}</p>
+                  <p style={{ fontSize: 11, color: '#6B88A8', margin: '2px 0 0' }}>{user.email}</p>
                 </div>
                 <button
                   onClick={() => { navigate('/settings'); setShowUser(false) }}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  style={{ width: '100%', textAlign: 'left', padding: '8px 10px', fontSize: 13, color: '#0A1628', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 8 }}
                 >
                   Paramètres
                 </button>
                 <button
                   onClick={() => { logout(); navigate('/login') }}
-                  className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
+                  style={{ width: '100%', textAlign: 'left', padding: '8px 10px', fontSize: 13, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                  <LogOut className="w-3.5 h-3.5" /> Déconnexion
+                  <LogOut style={{ width: 13, height: 13 }} /> Déconnexion
                 </button>
               </div>
             )}

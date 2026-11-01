@@ -1,34 +1,46 @@
 import { useEffect, useState } from 'react'
-import { Outlet, useNavigate, NavLink, useLocation } from 'react-router-dom'
-import { Home, PlayCircle, FileText, FlaskConical, BookOpen, Award, LogOut, Menu, X, Target, User, Headphones, GraduationCap } from 'lucide-react'
+import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom'
 import { getLearnerSession, setLearnerSession, clearLearnerSession, type LearnerSession } from '../../lib/learnerSession'
 import { learnerApiCall, learnerApi } from '../../lib/learnerApi'
 
 const BETA_USERNAMES = ['a.successcompass']
 
-const NAV_BASE = [
-  { path: '/espace/accueil',         label: 'Accueil',          icon: Home,          beta: false },
-  { path: '/espace/enregistrements', label: 'Enregistrements',  icon: PlayCircle,    beta: false },
-  { path: '/espace/documents',       label: 'Ressources',       icon: FileText,      beta: false },
-  { path: '/espace/tests',           label: 'Tests',            icon: FlaskConical,  beta: false },
-  { path: '/espace/objectifs',       label: 'Mes objectifs',    icon: Target,        beta: false },
-  { path: '/espace/notes',           label: 'Notes',            icon: BookOpen,      beta: false },
-  { path: '/espace/certificat',      label: 'Certificat',       icon: Award,         beta: false },
-  { path: '/espace/coaching',             label: 'Coaching',        icon: Headphones,   beta: true },
-  { path: '/espace/inscription-niveau',  label: 'Niveau suivant',  icon: GraduationCap, beta: true },
-  { path: '/espace/profil',              label: 'Mon profil',       icon: User,          beta: false },
+const BOTTOM_NAV = [
+  { path: '/espace/accueil', label: 'Accueil', icon: (active: boolean) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#6C5CE7' : '#B0AECF'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>
+  )},
+  { path: '/espace/agenda', label: 'Agenda', icon: (active: boolean) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#6C5CE7' : '#B0AECF'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+    </svg>
+  )},
+  { path: '/espace/progression', label: 'Progression', icon: (active: boolean) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#6C5CE7' : '#B0AECF'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </svg>
+  )},
+  { path: '/espace/messages', label: 'Messages', icon: (active: boolean) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#6C5CE7' : '#B0AECF'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+    </svg>
+  )},
+  { path: '/espace/profil', label: 'Profil', icon: (active: boolean) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#6C5CE7' : '#B0AECF'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+    </svg>
+  )},
 ]
 
 export default function EspaceLayout() {
   const [session, setSession] = useState<LearnerSession | null>(null)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
 
   useEffect(() => {
     const s = getLearnerSession()
     if (!s) { navigate('/espace/login', { replace: true }); return }
-    // Enrich if allPromotionIds or participantId missing (old session)
     if (!s.allPromotionIds?.length || !s.participantId) {
       enrichSession(s)
     } else {
@@ -59,81 +71,39 @@ export default function EspaceLayout() {
     }
   }
 
-  function logout() {
-    clearLearnerSession()
-    navigate('/espace/login')
-  }
-
   if (!session) return null
 
-  const initials = session.participantName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-  const levels = session.allLevels?.length ? session.allLevels : [session.formationLevel]
-  const levelLabel = levels.map(l => l === 'N1' ? 'Niveau 1' : l === 'N2' ? 'Niveau 2' : 'Niveau 3').join(' · ')
+  const isBeta = BETA_USERNAMES.includes(session.username)
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-100 flex flex-col transform transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="px-5 py-5 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="SC" className="h-8 w-auto" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-            <span className="font-bold text-gray-900 text-sm">Success Compass</span>
-          </div>
-        </div>
+    <div style={{ background: '#F5F4FF', minHeight: '100vh', display: 'flex', justifyContent: 'center' }}>
+      <div style={{ width: '100%', maxWidth: 430, position: 'relative', minHeight: '100vh', background: '#F5F4FF' }}>
 
-        <div className="px-4 py-4 border-b border-gray-50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-              {initials}
-            </div>
-            <div className="min-w-0">
-              <p className="font-semibold text-gray-900 text-sm truncate">{session.participantName}</p>
-              <p className="text-xs text-gray-400">{levelLabel}</p>
-            </div>
-          </div>
-        </div>
-
-        <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
-          {NAV_BASE.filter(n => !n.beta || BETA_USERNAMES.includes(session.username)).map(({ path, label, icon: Icon }) => (
-            <NavLink key={path} to={path} onClick={() => setSidebarOpen(false)}
-              className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-              {({ isActive }) => (<><Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />{label}</>)}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="p-3 border-t border-gray-100">
-          <button onClick={logout} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors">
-            <LogOut className="w-4 h-4" />Se déconnecter
-          </button>
-        </div>
-      </aside>
-
-      {/* Overlay mobile */}
-      {sidebarOpen && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
-
-      {/* Main */}
-      <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
-        {/* Mobile topbar */}
-        <div className="lg:hidden sticky top-0 z-20 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
-          <button onClick={() => setSidebarOpen(true)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg">
-            <Menu className="w-5 h-5" />
-          </button>
-          <span className="font-semibold text-gray-900 text-sm flex-1">
-            {NAV_BASE.find(n => n.path === location.pathname)?.label || 'Mon Espace'}
-          </span>
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-bold text-xs">
-            {initials}
-          </div>
-        </div>
-
-        <main className="flex-1 p-4 lg:p-8 max-w-4xl mx-auto w-full">
+        {/* CONTENT */}
+        <div style={{ paddingBottom: 80, paddingLeft: 16, paddingRight: 16 }}>
           <Outlet context={session} />
-        </main>
+        </div>
 
-        <footer className="text-center text-xs text-gray-400 py-4 border-t border-gray-100">
-          Success Compass Academy · {session.username}
-        </footer>
+        {/* BOTTOM NAV */}
+        <nav style={{
+          position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)',
+          width: '100%', maxWidth: 430,
+          background: '#fff', borderTop: '1px solid #EEECFF',
+          display: 'flex', paddingTop: 10, paddingBottom: 16,
+          boxShadow: '0 -4px 20px rgba(108,92,231,0.10)',
+          zIndex: 50,
+        }}>
+          {BOTTOM_NAV.filter(n => n.path !== '/espace/messages' || isBeta).map(({ path, label, icon }) => {
+            const active = location.pathname === path || (path === '/espace/accueil' && location.pathname === '/espace')
+            return (
+              <Link key={path} to={path} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, textDecoration: 'none' }}>
+                {icon(active)}
+                <span style={{ fontSize: 9, fontWeight: 600, color: active ? '#6C5CE7' : '#B0AECF' }}>{label}</span>
+                {active && <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#6C5CE7', marginTop: -1 }} />}
+              </Link>
+            )
+          })}
+        </nav>
       </div>
     </div>
   )

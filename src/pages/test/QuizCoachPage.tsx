@@ -41,6 +41,12 @@ export default function QuizCoachPage() {
   const answered    = Object.keys(answers).length
   const total       = QUIZ_QUESTIONS.length
   const allAnswered = answered === total
+  const [readyToSubmit, setReadyToSubmit] = useState(false)
+  useEffect(() => {
+    if (!allAnswered) { setReadyToSubmit(false); return }
+    const t = setTimeout(() => setReadyToSubmit(true), 500)
+    return () => clearTimeout(t)
+  }, [allAnswered])
 
   function answer(qId: number, idx: number) {
     setAnswers(prev => ({ ...prev, [qId]: idx }))
@@ -53,7 +59,10 @@ export default function QuizCoachPage() {
     const pct   = Math.round((score / total) * 100)
     const level = getLevel(pct)
 
-    await supabase.from('test_results').insert({
+    setSaving(false)
+    setStep('result')
+
+    supabase.from('test_results').insert({
       test_type:        'quiz_coach',
       participant_id:   participantId,
       first_name:       firstName,
@@ -61,9 +70,7 @@ export default function QuizCoachPage() {
       scores:           { correct: score, total, percentage: pct },
       dominant_profile: level.label,
       answers,
-    })
-    setSaving(false)
-    setStep('result')
+    }).then(({ error }) => { if (error) console.error('QuizCoach insert error:', error) })
   }
 
   const score = getQuizScore(answers)
@@ -156,7 +163,7 @@ export default function QuizCoachPage() {
           </div>
           <button
             onClick={submit}
-            disabled={!allAnswered || saving}
+            disabled={!readyToSubmit || saving}
             className="px-5 py-2 rounded-xl text-white text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-40 whitespace-nowrap"
             style={{ background: NAVY }}>
             {saving ? 'Envoi…' : 'Terminer'}
@@ -211,7 +218,7 @@ export default function QuizCoachPage() {
           </p>
           <button
             onClick={submit}
-            disabled={!allAnswered || saving}
+            disabled={!readyToSubmit || saving}
             className="w-full py-4 rounded-2xl text-white font-bold text-lg transition-opacity hover:opacity-90 disabled:opacity-40"
             style={{ background: NAVY }}>
             {saving ? 'Enregistrement…' : 'Soumettre le quiz'}

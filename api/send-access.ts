@@ -43,7 +43,7 @@ export default async function handler(req: any, res: any) {
     if (!email) return res.status(400).json({ error: 'Aucun email trouvé pour cet apprenant' })
 
     const firstName = learner.participant_name.split(' ')[0]
-    const loginUrl = 'https://success-compass.vercel.app/espace'
+    const loginUrl = 'https://scapp.ma/espace/login'
 
     const html = `
 <!DOCTYPE html>
@@ -83,7 +83,7 @@ export default async function handler(req: any, res: any) {
       </div>
 
       <p style="color:#9ca3af;font-size:12px;line-height:1.6;margin:0;text-align:center">
-        Pour toute question, contactez-nous à <a href="mailto:contact@successcompass.ma" style="color:#1B2A4A">contact@successcompass.ma</a><br>
+        Pour toute question, contactez-nous à <a href="mailto:contact@scapp.ma" style="color:#1B2A4A">contact@scapp.ma</a><br>
         Lien direct : <a href="${loginUrl}" style="color:#1B2A4A">${loginUrl}</a>
       </p>
     </div>
@@ -102,7 +102,7 @@ export default async function handler(req: any, res: any) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Success Compass <onboarding@resend.dev>',
+        from: 'Success Compass <noreply@scapp.ma>',
         to: [email],
         subject: '🎓 Vos accès à votre espace Success Compass',
         html,

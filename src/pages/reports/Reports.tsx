@@ -2,16 +2,24 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Card, CardHeader, CardTitle } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Download, TrendingUp, Users, CreditCard, Award } from 'lucide-react'
+import { PageHero, HeroBtn } from '../../components/ui/PageHero'
 import { MONTHLY_REVENUE, LEAD_SOURCES, CONVERSION_DATA, DASHBOARD_STATS } from '../../lib/mockData'
 import { formatCurrency } from '../../lib/utils'
 import { useAppStore } from '../../store/appStore'
 import * as XLSX from 'xlsx'
+import { useState, useEffect } from 'react'
 
 const PIE_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b']
 
 export default function Reports() {
   const { leads, participants, payments } = useAppStore()
   const stats = DASHBOARD_STATS
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
 
   function exportExcel() {
     const wb = XLSX.utils.book_new()
@@ -37,16 +45,26 @@ export default function Reports() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Rapports & Analytics</h2>
-        <div className="flex gap-2">
-          <Button variant="outline" icon={<Download className="w-4 h-4" />} onClick={() => window.print()}>Exporter PDF</Button>
-          <Button variant="outline" icon={<Download className="w-4 h-4" />} onClick={exportExcel}>Exporter Excel</Button>
-        </div>
-      </div>
+      <PageHero
+        emoji="📊"
+        title="Rapports & Analytics"
+        sub="Vue globale des performances Success Compass"
+        gradient="linear-gradient(135deg, #064e3b 0%, #059669 60%, #34d399 100%)"
+        actions={
+          <>
+            <HeroBtn onClick={() => window.print()}><Download className="w-3.5 h-3.5" /> PDF</HeroBtn>
+            <HeroBtn onClick={exportExcel}><Download className="w-3.5 h-3.5" /> Excel</HeroBtn>
+          </>
+        }
+        stats={[
+          { label: 'Participants', value: participants.length },
+          { label: 'Leads', value: leads.length },
+          { label: 'Paiements', value: payments.length },
+        ]}
+      />
 
       {/* KPI Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: isMobile ? 8 : 16 }}>
         {[
           { label: 'Revenue total', value: formatCurrency(stats.revenueThisYear), icon: CreditCard, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20' },
           { label: 'Total participants', value: participants.length, icon: Users, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' },
