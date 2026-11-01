@@ -55,6 +55,7 @@ import EspaceDevoirs from './pages/espace/EspaceDevoirs'
 import EspaceObjectifs from './pages/espace/EspaceObjectifs'
 import EspaceProfil from './pages/espace/EspaceProfil'
 import EspaceCoaching from './pages/espace/EspaceCoaching'
+import EspaceCours from './pages/espace/EspaceCours'
 import EspaceInscriptionNiveau from './pages/espace/EspaceInscriptionNiveau'
 import EspaceAdminLayout from './pages/espace/admin/EspaceAdminLayout'
 import EspaceAdminDashboard from './pages/espace/admin/EspaceAdminDashboard'
@@ -226,6 +227,7 @@ export default function App() {
           <Route path="certificat"       element={<EspaceCertificat />} />
           <Route path="profil"                element={<EspaceProfil />} />
           <Route path="coaching"              element={<EspaceCoaching />} />
+          <Route path="cours"                 element={<EspaceCours />} />
           <Route path="inscription-niveau"    element={<EspaceInscriptionNiveau />} />
           <Route index                        element={<Navigate to="/espace/accueil" replace />} />
         </Route>

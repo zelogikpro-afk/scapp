@@ -97,6 +97,7 @@ export default function EspaceAccueil() {
   const totalTests = stats.testUnlocks || 1
 
   const quickLinks = [
+    { label: 'Cours & Leçons', sub: 'Modules & vidéos', emoji: '🎓', to: '/espace/cours', color: '#1ABCAB', bg: '#f0fdfb' },
     { label: 'Séances vidéo', sub: `${stats.recordings} vidéo${stats.recordings !== 1 ? 's' : ''}`, emoji: '🎬', to: '/espace/enregistrements', color: '#6C5CE7', bg: '#F0EEFF' },
     { label: 'Tests & Quiz', sub: `${stats.testsDone}/${totalTests} fait${stats.testsDone !== 1 ? 's' : ''}`, emoji: '🧪', to: '/espace/tests', color: '#0EA5E9', bg: '#E0F2FE' },
     { label: 'Documents', sub: `${stats.docs} ressource${stats.docs !== 1 ? 's' : ''}`, emoji: '📚', to: '/espace/documents', color: '#10B981', bg: '#ECFDF5' },

@@ -16,9 +16,9 @@ const BOTTOM_NAV = [
       <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
     </svg>
   )},
-  { path: '/espace/progression', label: 'Progression', icon: (active: boolean) => (
+  { path: '/espace/cours', label: 'Cours', icon: (active: boolean) => (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#6C5CE7' : '#B0AECF'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      <path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/>
     </svg>
   )},
   { path: '/espace/messages', label: 'Messages', icon: (active: boolean) => (
