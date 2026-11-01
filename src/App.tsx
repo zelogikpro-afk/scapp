@@ -68,6 +68,7 @@ import EspaceAdminTests from './pages/espace/admin/EspaceAdminTests'
 import EspaceAdminPromotions from './pages/espace/admin/EspaceAdminPromotions'
 import EspaceAdminMessages from './pages/espace/admin/EspaceAdminMessages'
 import EspaceAdminCoaching from './pages/espace/admin/EspaceAdminCoaching'
+import EspaceAdminCours from './pages/espace/admin/EspaceAdminCours'
 import Demandes from './pages/admin/Demandes'
 import ElearningAdmin from './pages/elearning/ElearningAdmin'
 import TrainerLogin from './pages/formateur/TrainerLogin'
@@ -209,6 +210,7 @@ export default function App() {
           <Route path="promotions"        element={<EspaceAdminPromotions />} />
           <Route path="messages"          element={<EspaceAdminMessages />} />
           <Route path="coaching"          element={<EspaceAdminCoaching />} />
+          <Route path="cours"             element={<EspaceAdminCours />} />
         </Route>
         <Route path="/espace" element={<EspaceLayout />}>
           <Route path="accueil"          element={<EspaceAccueil />} />

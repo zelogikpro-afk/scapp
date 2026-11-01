@@ -3,6 +3,7 @@ import { clearLearnerSession } from '../../../lib/learnerSession'
 import { useNavigate } from 'react-router-dom'
 
 const LINKS = [
+  { label: 'Cours & leçons',            sub: 'Modules, leçons, vidéos complémentaires', icon: '🎓', color: '#1ABCAB', bg: '#f0fdfb', path: '/espace/admin/cours' },
   { label: 'Messages & notifications', sub: 'Déclarations paiement, demandes packs', icon: '💬', color: '#EF4444', bg: '#FEF2F2', path: '/espace/admin/messages' },
   { label: 'Coaching individuel',      sub: 'Planifier les séances, suivre les packs', icon: '🎯', color: '#10B981', bg: '#ECFDF5', path: '/espace/admin/coaching' },
   { label: 'Vidéos & enregistrements', sub: 'Ajouter et organiser les séances vidéo', icon: '🎬', color: '#6C5CE7', bg: '#F0EEFF', path: '/espace/admin/videos' },
@@ -37,7 +38,7 @@ export default function EspaceAdminPlus() {
               <div style={{ fontWeight: 700, fontSize: 14, color: '#1E1B4B' }}>{item.label}</div>
               <div style={{ fontSize: 12, color: '#8B8AAA', marginTop: 2 }}>{item.sub}</div>
             </div>
-            {i > 1 && <div style={{ fontSize: 11, fontWeight: 600, color: '#C4C2DD', background: '#F5F4FF', padding: '3px 8px', borderRadius: 6 }}>Bientôt</div>}
+            {i > 2 && <div style={{ fontSize: 11, fontWeight: 600, color: '#C4C2DD', background: '#F5F4FF', padding: '3px 8px', borderRadius: 6 }}>Bientôt</div>}
           </Link>
         ))}
       </div>
